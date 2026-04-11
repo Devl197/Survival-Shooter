@@ -1,18 +1,27 @@
-﻿using UnityEngine;
+﻿using System.Collections.Generic;
+using UnityEngine;
 
 [CreateAssetMenu(fileName = "WaveData", menuName = "Waves/Wave Data")]
 public class WaveData : ScriptableObject
 {
-    [Header("Enemy Settings")]
-    //public GameObject enemyPrefab;
-    public EnemyType enemyType;
-    public int enemyCount = 10;
+    [Header("Enemies")]
+    public List<WaveEnemyEntry> enemies;
 
     [Header("Timing")]
-    [Tooltip("Koliko sekundi traje ovaj wave (0 = dok svi ne budu ubijeni)")]
     public float duration = 30f;
-    [Tooltip("Pauza između spawna neprijatelja u sekundama")]
-    public float spawnInterval = 1.5f;
+    [Tooltip("Globalna pauza između spawna — koristi se ako entry nema svoju")]
+    public float defaultSpawnInterval = 1.5f;
+
+    [Header("Spawn Mode")]
+    [Tooltip("Sequential = spawna sve jednog tipa pa prelazi na sledeci\nInterleaved = naizmenicno mesanje tipova")]
+    public SpawnMode spawnMode = SpawnMode.Sequential;
+
+    public int TotalEnemyCount()
+    {
+        int total = 0;
+        foreach (var entry in enemies) total += entry.count;
+        return total;
+    }
 }
 
-public enum EnemyType { Bunny, Bear, Hellephant }
+public enum SpawnMode { Sequential, Interleaved }

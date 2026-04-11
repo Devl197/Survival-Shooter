@@ -12,7 +12,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f041f7a534d2ae44093c0ee2f4996319, type: 3}
   m_Name: Level1
   m_EditorClassIdentifier: 
-  enemyType: 0
-  enemyCount: 10
+  enemies:
+  - enemyType: 0
+    count: 10
+    spawnInterval: 0
+  - enemyType: 1
+    count: 5
+    spawnInterval: 0
   duration: 30
-  spawnInterval: 1.5
+  defaultSpawnInterval: 1.5
+  spawnMode: 1

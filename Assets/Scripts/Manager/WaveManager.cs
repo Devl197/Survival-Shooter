@@ -38,11 +38,14 @@ public class WaveManager : MonoBehaviour
     private IEnumerator RunWave(WaveData data)
     {
         State = WaveState.Spawning;
-        _remainingEnemies = data.enemyCount;
+        _remainingEnemies = data.TotalEnemyCount();
 
         OnWaveStarted?.Invoke(CurrentWaveIndex);
-        Debug.Log($"Wave {CurrentWaveIndex + 1} počeo — {data.enemyType}, {data.enemyCount} neprijatelja");
+        for (int i = 0; i < data.enemies.Count; i++)
+        {
 
+            Debug.Log($"Wave {CurrentWaveIndex + 1} počeo — {data.enemies[i].enemyType}, {data.enemies[i].count} neprijatelja");
+        }
         // Pokreni spawning
         spawner.StartSpawning(data, OnEnemyDied);
 

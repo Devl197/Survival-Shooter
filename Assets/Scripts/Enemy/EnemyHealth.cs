@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using System;
+using UnityEngine;
 
 public class EnemyHealth : MonoBehaviour
 {
@@ -7,6 +8,7 @@ public class EnemyHealth : MonoBehaviour
     public float sinkSpeed = 2.5f;
     public int scoreValue = 10;
     public AudioClip deathClip;
+    private Action _onDied;
 
 
     Animator anim;
@@ -40,6 +42,10 @@ public class EnemyHealth : MonoBehaviour
         }
     }
 
+    public void SetDeathAction(Action onEnemyDied)
+    {
+        _onDied = onEnemyDied;
+    }
 
     public void TakeDamage(int amount, Vector3 hitPoint)
     {
@@ -81,6 +87,7 @@ public class EnemyHealth : MonoBehaviour
         //Play Sound Dead
         enemyAudio.clip = deathClip;
         enemyAudio.Play();
+        _onDied?.Invoke();
     }
 
     public void StartSinking()

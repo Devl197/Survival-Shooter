@@ -2182,7 +2182,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 27c63be2a8918c741863160b9d9da122, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  damagePerShot: 20
+  weaponData: {fileID: 11400000, guid: 01e29657e8f44763a3f051d7cb5118db, type: 2}
   timeBetweenBullets: 0.15
   range: 100
 --- !u!82 &1864596040

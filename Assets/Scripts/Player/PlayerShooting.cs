@@ -2,7 +2,7 @@
 
 public class PlayerShooting : MonoBehaviour
 {
-    public int damagePerShot = 20;
+    [SerializeField] private WeaponData weaponData;
     public float timeBetweenBullets = 0.15f;
     public float range = 100f;
 
@@ -28,6 +28,12 @@ public class PlayerShooting : MonoBehaviour
         gunLine = GetComponent<LineRenderer>();
         gunAudio = GetComponent<AudioSource>();
         gunLight = GetComponent<Light>();
+
+        if (weaponData == null)
+        {
+            Debug.LogError("PlayerShooting requires a WeaponData asset. Assign it in the Inspector.", this);
+            enabled = false;
+        }
     }
 
 
@@ -56,7 +62,7 @@ public class PlayerShooting : MonoBehaviour
     public void Shoot()
     {
         // Commands must respect pause, cooldown and the disabled/dead state.
-        if (!isActiveAndEnabled || Time.timeScale == 0f || timer < timeBetweenBullets)
+        if (!isActiveAndEnabled || weaponData == null || Time.timeScale == 0f || timer < timeBetweenBullets)
         {
             return;
         }
@@ -90,7 +96,7 @@ public class PlayerShooting : MonoBehaviour
             if (enemyHealth != null)
             {
                 //Lakukan Take Damage
-                enemyHealth.TakeDamage(damagePerShot, shootHit.point);
+                enemyHealth.TakeDamage(weaponData.DamagePerShot, shootHit.point);
             }
 
             //Set line end position ke hit position

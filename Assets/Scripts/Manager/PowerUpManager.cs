@@ -4,6 +4,14 @@ public class PowerUpManager : MonoBehaviour
 {
     public PlayerHealth playerHealth;
     public float spawnTime = 7f;
+    bool benchmarkDisabled;
+
+    public void DisableForBenchmark()
+    {
+        benchmarkDisabled = true;
+        CancelInvoke();
+        enabled = false;
+    }
 
     [SerializeField]
     PowerUpFactory factory;
@@ -17,6 +25,7 @@ public class PowerUpManager : MonoBehaviour
 
     void Start()
     {
+        if (benchmarkDisabled) return;
         //Mengeksekusi fungs Spawn setiap beberapa detik sesuai dengan nilai spawnTime
         InvokeRepeating("Spawn", spawnTime, spawnTime);
     }
@@ -24,6 +33,7 @@ public class PowerUpManager : MonoBehaviour
 
     void Spawn()
     {
+        if (benchmarkDisabled) return;
         //Jika player telah mati maka tidak membuat enemy baru
         if (playerHealth.currentHealth <= 0f)
         {

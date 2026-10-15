@@ -5,6 +5,12 @@ public class InputHandler : MonoBehaviour
 {
     public PlayerMovement playerMovement;
     public PlayerShooting playerShooting;
+    public bool ReplayControlsInput { get; set; }
+
+    public void ClearHistory()
+    {
+        commands.Clear();
+    }
 
     //Queue untuk menyimpan list command
     Queue<Command> commands = new Queue<Command>();
@@ -12,7 +18,7 @@ public class InputHandler : MonoBehaviour
     void FixedUpdate()
     {
         // Disabled movement also blocks commands after player death.
-        if (playerMovement == null || !playerMovement.isActiveAndEnabled)
+        if (ReplayControlsInput || playerMovement == null || !playerMovement.isActiveAndEnabled)
         {
             return;
         }
@@ -28,6 +34,7 @@ public class InputHandler : MonoBehaviour
 
     void Update()
     {
+        if (ReplayControlsInput) return;
         //Mengahndle shoot
         Command shootCommand = InputShootHandling();
         if (shootCommand != null)

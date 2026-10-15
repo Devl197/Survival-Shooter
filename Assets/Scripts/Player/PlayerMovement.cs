@@ -2,6 +2,8 @@
 public class PlayerMovement : MonoBehaviour
 {
     public float speed = 6f;
+    public bool ReplayControlsInput { get; set; }
+    public bool IsWalking { get; private set; }
     Vector3 movement;
     Animator anim;
     Rigidbody playerRigidbody;
@@ -22,12 +24,13 @@ public class PlayerMovement : MonoBehaviour
 
     private void FixedUpdate()
     {
-        Turning();
+        if (!ReplayControlsInput) Turning();
     }
 
     public void Animating(float h, float v)
     {
         bool walking = h != 0f || v != 0f;
+        IsWalking = walking;
         anim.SetBool("IsWalking", walking);
     }
 

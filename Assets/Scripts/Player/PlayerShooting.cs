@@ -5,6 +5,7 @@ public class PlayerShooting : MonoBehaviour
     [SerializeField] private WeaponData weaponData;
     public float timeBetweenBullets = 0.15f;
     public float range = 100f;
+    public event System.Action<Vector3, Vector3> ShotFired;
 
 
     float timer;
@@ -67,6 +68,19 @@ public class PlayerShooting : MonoBehaviour
             return;
         }
 
+        Fire(transform.position, transform.forward);
+        if (ShotFired != null) ShotFired(shootRay.origin, shootRay.direction);
+    }
+
+    // Recorded successful shots already include the original cooldown timing.
+    public void ReplayShot(Vector3 origin, Vector3 direction)
+    {
+        if (!isActiveAndEnabled || weaponData == null || Time.timeScale == 0f) return;
+        Fire(origin, direction);
+    }
+
+    void Fire(Vector3 origin, Vector3 direction)
+    {
         timer = 0f;
 
         //Play audio
@@ -81,11 +95,11 @@ public class PlayerShooting : MonoBehaviour
 
         //enable Line renderer dan set first position
         gunLine.enabled = true;
-        gunLine.SetPosition(0, transform.position);
+        gunLine.SetPosition(0, origin);
 
         //Set posisi ray shoot dan direction
-        shootRay.origin = transform.position;
-        shootRay.direction = transform.forward;
+        shootRay.origin = origin;
+        shootRay.direction = direction;
 
         //Lakukan raycast jika mendeteksi id nemy hit apapun
         if (Physics.Raycast(shootRay, out shootHit, range, shootableMask))

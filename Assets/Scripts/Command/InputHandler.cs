@@ -11,7 +11,12 @@ public class InputHandler : MonoBehaviour
 
     void FixedUpdate()
     {
-        //Menghandle input movement
+        // Disabled movement also blocks commands after player death.
+        if (playerMovement == null || !playerMovement.isActiveAndEnabled)
+        {
+            return;
+        }
+
         Command moveCommand = InputMovementHandling();
         if (moveCommand != null)
         {
@@ -33,32 +38,21 @@ public class InputHandler : MonoBehaviour
 
     Command InputMovementHandling()
     {
-        //Check jika movement sesuai dengan key nya
-        if (Input.GetKey(KeyCode.D))
+        float h = Input.GetAxisRaw("Horizontal");
+        float v = Input.GetAxisRaw("Vertical");
+
+        if (h != 0f || v != 0f)
         {
-            return new MoveCommand(playerMovement, 1, 0);
+            return new MoveCommand(playerMovement, h, v);
         }
-        else if (Input.GetKey(KeyCode.A))
+
+        if (Input.GetKey(KeyCode.Z))
         {
-            return new MoveCommand(playerMovement, -1, 0);
-        }
-        else if (Input.GetKey(KeyCode.W))
-        {
-            return new MoveCommand(playerMovement, 0, 1);
-        }
-        else if (Input.GetKey(KeyCode.S))
-        {
-            return new MoveCommand(playerMovement, 0, -1);
-        }
-        else if (Input.GetKey(KeyCode.Z))
-        {
-            //Undo movement
             return Undo();
         }
-        else
-        {
-            return new MoveCommand(playerMovement, 0, 0); ;
-        }
+
+        // Keep the idle command so the walking animation stops.
+        return new MoveCommand(playerMovement, 0f, 0f);
     }
 
     Command Undo()
@@ -74,14 +68,16 @@ public class InputHandler : MonoBehaviour
 
     Command InputShootHandling()
     {
-        //Jika menembak trigger shoot command
-        if (Input.GetButtonDown("Fire1"))
-        {
-            return new ShootCommand(playerShooting);
-        }
-        else
+        if (playerShooting == null || !playerShooting.isActiveAndEnabled)
         {
             return null;
         }
+
+        if (Time.timeScale != 0f && Input.GetButton("Fire1"))
+        {
+            return new ShootCommand(playerShooting);
+        }
+
+        return null;
     }
 }

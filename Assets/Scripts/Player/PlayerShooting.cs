@@ -36,11 +36,6 @@ public class PlayerShooting : MonoBehaviour
 
         timer += Time.deltaTime;
 
-        if (Input.GetButton("Fire1") && timer >= timeBetweenBullets && Time.timeScale != 0)
-        {
-            Shoot();
-        }
-
         if (timer >= timeBetweenBullets * effectsDisplayTime)
         {
             DisableEffects();
@@ -60,6 +55,12 @@ public class PlayerShooting : MonoBehaviour
 
     public void Shoot()
     {
+        // Commands must respect pause, cooldown and the disabled/dead state.
+        if (!isActiveAndEnabled || Time.timeScale == 0f || timer < timeBetweenBullets)
+        {
+            return;
+        }
+
         timer = 0f;
 
         //Play audio

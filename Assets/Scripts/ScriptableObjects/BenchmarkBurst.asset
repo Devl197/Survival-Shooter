@@ -11,16 +11,12 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: b59331d87dc84d41aba6e734eacde001, type: 3}
   m_Name: BenchmarkBurst
-  m_EditorClassIdentifier:
+  m_EditorClassIdentifier: 
   pattern: 1
-  enemyCount: 50
+  enemyCount: 100
   groupSize: 10
   replacementInterval: 2
   initialLifetime: 5
   deathDuration: 2
   seed: 12345
-  typeWeights:
-  - 1
-  - 1
-  - 1
-
+  typeWeights: 010000000100000001000000

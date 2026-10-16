@@ -12,4 +12,4 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d78d8de4b9b14da0942d73bd147e109a, type: 3}
   m_Name: DefaultWeapon
   m_EditorClassIdentifier: 
-  damagePerShot: 20
+  damagePerShot: 100

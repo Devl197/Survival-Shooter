@@ -20,6 +20,7 @@ public class PlayerHealth : MonoBehaviour
     PlayerShooting playerShooting;
     bool isDead;
     bool damaged;
+    public bool BenchmarkInvulnerable { get; set; }
 
 
     void Awake()
@@ -56,6 +57,7 @@ public class PlayerHealth : MonoBehaviour
     //fungsi untuk mendapatkan damage
     public void TakeDamage(int amount)
     {
+        if (BenchmarkInvulnerable) return;
         damaged = true;
 
         //mengurangi health

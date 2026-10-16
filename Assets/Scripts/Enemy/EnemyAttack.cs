@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using System.Collections;
 
 public class EnemyAttack : MonoBehaviour
@@ -12,6 +12,12 @@ public class EnemyAttack : MonoBehaviour
     EnemyHealth enemyHealth;
     bool playerInRange;
     float timer;
+
+    public void ResetForSpawn()
+    {
+        timer = 0f;
+        playerInRange = false;
+    }
 
 
     void Awake()

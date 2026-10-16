@@ -14,11 +14,14 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   enemies:
   - enemyType: 0
-    count: 10
-    spawnInterval: 0
+    count: 100
+    spawnInterval: 0.5
   - enemyType: 1
-    count: 5
-    spawnInterval: 0
+    count: 50
+    spawnInterval: 0.5
+  - enemyType: 2
+    count: 50
+    spawnInterval: 0.5
   duration: 30
   defaultSpawnInterval: 1.5
   spawnMode: 1

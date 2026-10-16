@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using UnityEngine;
 
 public class EnemyHealth : MonoBehaviour
@@ -17,6 +17,28 @@ public class EnemyHealth : MonoBehaviour
     CapsuleCollider capsuleCollider;
     bool isDead;
     bool isSinking;
+    public bool BenchmarkImmortal { get; set; }
+    EnemySpawner owner;
+    AudioClip originalClip;
+    Vector3 originalParticlePosition;
+
+    public void ResetForSpawn(bool benchmark, EnemySpawner spawner, Action onDied)
+    {
+        CancelInvoke();
+        StopAllCoroutines();
+        currentHealth = startingHealth;
+        isDead = isSinking = false;
+        _onDied = onDied;
+        BenchmarkImmortal = benchmark;
+        owner = spawner;
+        capsuleCollider.isTrigger = false;
+        enemyAudio.Stop();
+        enemyAudio.clip = originalClip;
+        hitParticles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+        hitParticles.transform.localPosition = originalParticlePosition;
+        anim.Rebind();
+        anim.Update(0f);
+    }
 
 
     void Awake()
@@ -24,7 +46,9 @@ public class EnemyHealth : MonoBehaviour
         //Menapatkan reference komponen
         anim = GetComponent<Animator>();
         enemyAudio = GetComponent<AudioSource>();
+        originalClip = enemyAudio.clip;
         hitParticles = GetComponentInChildren<ParticleSystem>();
+        originalParticlePosition = hitParticles.transform.localPosition;
         capsuleCollider = GetComponent<CapsuleCollider>();
 
         //Set current health
@@ -47,6 +71,17 @@ public class EnemyHealth : MonoBehaviour
         _onDied = onEnemyDied;
     }
 
+    public void BeginBenchmarkDeath()
+    {
+        if (isDead) return;
+        currentHealth = 0;
+        var agent = GetComponent<UnityEngine.AI.NavMeshAgent>();
+        if (agent.isOnNavMesh) agent.ResetPath();
+        agent.enabled = false;
+        GetComponent<Rigidbody>().isKinematic = true;
+        Death();
+    }
+
     public void TakeDamage(int amount, Vector3 hitPoint)
     {
         //Check jika dead
@@ -57,7 +92,7 @@ public class EnemyHealth : MonoBehaviour
         enemyAudio.Play();
 
         //kurangi health
-        currentHealth -= amount;
+        if (!BenchmarkImmortal) currentHealth -= amount;
 
         //Ganti posisi particle
         hitParticles.transform.position = hitPoint;
@@ -92,12 +127,18 @@ public class EnemyHealth : MonoBehaviour
 
     public void StartSinking()
     {
+        if (BenchmarkImmortal || isSinking || !isDead) return;
         //disable Navmesh Component
         GetComponent<UnityEngine.AI.NavMeshAgent>().enabled = false;
         //Set rigisbody ke kimematic
         GetComponent<Rigidbody>().isKinematic = true;
         isSinking = true;
         ScoreManager.score += scoreValue;
-        Destroy(gameObject, 2f);
+        Invoke("FinishDespawn", 2f);
+    }
+    void FinishDespawn()
+    {
+        if (owner != null) owner.Despawn(this);
+        else Destroy(gameObject);
     }
 }

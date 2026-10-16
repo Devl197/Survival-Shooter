@@ -49,6 +49,37 @@ public class SessionReplay : MonoBehaviour
 
     public bool IsRecording { get; private set; }
     public bool IsPlaying { get; private set; }
+    public bool ManagedByBenchmark { get; set; }
+    public float StartedAt { get { return startedAt; } }
+    public float SessionDuration { get; private set; }
+    public string Status { get; private set; }
+    public float Elapsed { get { return Mathf.Min(Time.time - startedAt, SessionDuration); } }
+
+    public float PrepareBenchmark()
+    {
+        if (selectedMode == ReplayStartupMode.Record) SessionDuration = recordingDuration;
+        else if (selectedMode == ReplayStartupMode.Playback)
+        {
+            session = JsonUtility.FromJson<ReplaySession>(File.ReadAllText(FilePath));
+            Validate(session);
+            SessionDuration = session.duration;
+        }
+        else throw new InvalidOperationException("Select Record or Playback before starting a benchmark.");
+        if (!Finite(SessionDuration) || SessionDuration <= 0f)
+            throw new InvalidDataException("Session duration must be positive.");
+        return SessionDuration;
+    }
+
+    public bool BeginBenchmark()
+    {
+        if (!ManagedByBenchmark || selectedMode == ReplayStartupMode.Normal) return false;
+        if (selectedMode == ReplayStartupMode.Record)
+        {
+            StartRecording();
+        }
+        else StartPlayback();
+        return IsRecording || IsPlaying;
+    }
     public string FilePath { get { return Path.Combine(Application.persistentDataPath, "Replays", Path.GetFileName(fileName)); } }
 
     InputHandler input;
@@ -81,6 +112,8 @@ public class SessionReplay : MonoBehaviour
     void Start()
     {
         if (selectedMode == ReplayStartupMode.Normal) return;
+        Status = "Preparing";
+        gameObject.AddComponent<ReplayStatusUI>().replay = this;
         input = FindObjectOfType<InputHandler>();
         if (input != null)
         {
@@ -97,6 +130,7 @@ public class SessionReplay : MonoBehaviour
         }
         cameraFollow = replayCamera.GetComponent<CameraFollow>();
         shooting.ShotFired += RecordShot;
+        if (ManagedByBenchmark) return;
         Debug.Log("Benchmark session: " + selectedMode + ". Power-ups disabled. F8 stops. File: " + FilePath, this);
         if (selectedMode == ReplayStartupMode.Record) StartRecording();
         else StartPlayback();
@@ -155,6 +189,8 @@ public class SessionReplay : MonoBehaviour
         durationLimit = recordingDuration;
         startedAt = Time.time;
         IsRecording = true;
+        SessionDuration = durationLimit;
+        Status = "RECORDING";
         CaptureFrame(0f);
         Debug.Log("Recording started for " + durationLimit + " game seconds.", this);
     }
@@ -184,12 +220,14 @@ public class SessionReplay : MonoBehaviour
         if (!Application.isPlaying || !CanStart() || IsRecording || IsPlaying) return;
         try
         {
-            ReplaySession loaded = JsonUtility.FromJson<ReplaySession>(File.ReadAllText(FilePath));
+            ReplaySession loaded = ManagedByBenchmark ? session : JsonUtility.FromJson<ReplaySession>(File.ReadAllText(FilePath));
             Validate(loaded);
             session = loaded;
+            SessionDuration = session.duration;
         }
         catch (Exception exception)
         {
+            Status = "Load failed - see Console";
             Debug.LogError("Could not load replay: " + exception.Message, this);
             return;
         }
@@ -205,6 +243,7 @@ public class SessionReplay : MonoBehaviour
         frameIndex = shotIndex = 0;
         startedAt = Time.time;
         IsPlaying = true;
+        Status = "PLAYBACK";
         ApplyFrame(0f);
         Debug.Log("Replay started with the fresh scene. Enemy simulation is not deterministic.", this);
     }
@@ -226,6 +265,8 @@ public class SessionReplay : MonoBehaviour
     [ContextMenu("Stop and Save Recording / Stop Playback")]
     public void Stop()
     {
+        if (IsRecording || IsPlaying)
+            Status = Elapsed >= SessionDuration ? "Completed" : "Stopped";
         if (IsRecording)
         {
             CaptureFrame(Mathf.Min(Time.time - startedAt, durationLimit));
@@ -241,7 +282,7 @@ public class SessionReplay : MonoBehaviour
                 else File.Move(temporary, FilePath);
                 Debug.Log("Saved replay (" + session.duration + " s, " + session.shots.Count + " shots): " + FilePath, this);
             }
-            catch (Exception exception) { Debug.LogError("Could not save replay: " + exception.Message, this); }
+            catch (Exception exception) { Status = "Save failed - see Console"; Debug.LogError("Could not save replay: " + exception.Message, this); }
         }
         if (!IsPlaying) return;
         IsPlaying = false;

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -11,16 +11,12 @@ public class EnemyManager : MonoBehaviour
 
     [SerializeField]
     EnemyFactory factory;
-    IFactory Factory
-    {
-        get
-        {
-            return factory as IFactory;
-        }
-    }
+    public EnemySpawner spawner;
 
     public void StartSpawning(WaveData data, Action onEnemyDied)
     {
+        if (spawner == null) throw new InvalidOperationException("EnemyManager requires EnemySpawner.");
+        StopSpawning();
         IEnumerator routine = data.spawnMode == SpawnMode.Sequential
             ? SpawnSequential(data, onEnemyDied)
             : SpawnInterleaved(data, onEnemyDied);
@@ -86,9 +82,8 @@ public class EnemyManager : MonoBehaviour
         }
 
         Debug.Log($" Enemy of {(EnemyType)enemyType} is created!");
-        var enemy = Factory.FactoryMethod(enemyType);
-        var health = enemy.GetComponent<EnemyHealth>();
-        health.SetDeathAction(onEnemyDied);
+        var point = factory.spawnPoints[enemyType];
+        spawner.Spawn(enemyType, point.position, point.rotation, false, onEnemyDied);
     }
 
     public void StopSpawning()
@@ -112,6 +107,6 @@ public class EnemyManager : MonoBehaviour
         int spawnEnemy = UnityEngine.Random.Range(0, 3);
 
         //Memduplikasi enemy
-        var enemy = Factory.FactoryMethod(spawnEnemy);
+        SpawnEnemy(spawnEnemy, null);
     }
 }

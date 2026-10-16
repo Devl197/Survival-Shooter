@@ -69,3 +69,7 @@ izvoza benchmark metrika.
 
 Skripte su kompajlirane protiv Unity 2018.3.3f1 biblioteka. Interaktivne provere
 iznad nisu izvrsene u ovoj izmeni.
+
+U benchmark rezimu isto trajanje vazi za runner i replay: Recording Duration pri
+snimanju, trajanje fajla pri reprodukciji. UI prikazuje status i proteklo/ukupno
+vreme; Play Mode ostaje otvoren po zavrsetku. Detalji su u BENCHMARK.md.

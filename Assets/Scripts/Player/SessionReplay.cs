@@ -50,6 +50,7 @@ public class SessionReplay : MonoBehaviour
     public bool IsRecording { get; private set; }
     public bool IsPlaying { get; private set; }
     public bool ManagedByBenchmark { get; set; }
+    public event Action Stopping;
     public float StartedAt { get { return startedAt; } }
     public float SessionDuration { get; private set; }
     public string Status { get; private set; }
@@ -155,7 +156,7 @@ public class SessionReplay : MonoBehaviour
         if (IsRecording)
         {
             CaptureFrame(Mathf.Min(elapsed, durationLimit));
-            if (elapsed >= durationLimit) Stop();
+            if (elapsed >= durationLimit && !ManagedByBenchmark) Stop();
         }
         else
         {
@@ -166,7 +167,7 @@ public class SessionReplay : MonoBehaviour
                 ReplayShotData shot = session.shots[shotIndex++];
                 shooting.ReplayShot(shot.origin, shot.direction);
             }
-            if (elapsed >= session.duration) Stop();
+            if (elapsed >= session.duration && !ManagedByBenchmark) Stop();
         }
     }
 
@@ -265,6 +266,7 @@ public class SessionReplay : MonoBehaviour
     [ContextMenu("Stop and Save Recording / Stop Playback")]
     public void Stop()
     {
+        if ((IsRecording || IsPlaying) && Stopping != null) Stopping();
         if (IsRecording || IsPlaying)
             Status = Elapsed >= SessionDuration ? "Completed" : "Stopped";
         if (IsRecording)

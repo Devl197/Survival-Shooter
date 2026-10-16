@@ -46,7 +46,7 @@ public class ReplayStatusUI : MonoBehaviour
         nextRefresh = Time.unscaledTime + 0.25f;
         bool active = replay.IsRecording || replay.IsPlaying;
         string state = replay.Status ?? "Preparing";
-        if (benchmark != null && benchmark.Selected && benchmark.Status == "Failed") state = "Benchmark failed - see Console";
+        if (benchmark != null && benchmark.Selected && !active) state = benchmark.Status;
         string time = active ? string.Format("{0:F1} / {1:F1} s", replay.Elapsed, replay.SessionDuration) : "";
         label.text = state + (active && Time.timeScale == 0f ? " (paused)" : "") + "  " + time +
             (active ? "\nF8: stop" : "\nSession inactive. Play Mode remains open.");

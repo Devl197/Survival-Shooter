@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: BenchmarkContinuous
   m_EditorClassIdentifier: 
   pattern: 0
-  enemyCount: 100
+  enemyCount: 300
   groupSize: 10
   replacementInterval: 2
   initialLifetime: 5

@@ -121,3 +121,12 @@ tonjenje, score i zavrsetak talasa, zatim ponovno koriscenje istih objekata.
 Ponoviti sa InstantiateDestroy i oba benchmark scenarija; brojaci treba da budu
 isti, a pool bez prosirenja nakon benchmark pripreme. Proveriti da novi spawn
 moze da prima damage u normalnoj igri i da ne cuva callback prethodnog talasa.
+
+## PresentMon capture
+
+Na BenchmarkRunner ukljuciti Capture With Present Mon i podesiti Present Mon Path.
+Integracija radi u Windows buildu, ne u Editoru; podrazumevano je iskljucena.
+Tools/PresentMon nije u Assets i mora se kopirati uz build ili koristiti apsolutna
+putanja. Priprema i ciscenje ne ulaze u filtrirani CPU frame interval. Izlazi su
+u persistentDataPath/Benchmarks: raw.csv, session.json, capture.log i measured.csv
+za uspesan test. Detalji, ogranicenja i koraci provere: Tools/PresentMon/README.md.

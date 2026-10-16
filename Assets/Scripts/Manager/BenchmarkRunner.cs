@@ -1,5 +1,7 @@
 using UnityEngine.AI;
 using System;
+using System.Collections;
+using System.IO;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -9,6 +11,19 @@ public class BenchmarkRunner : MonoBehaviour
 {
     [Tooltip("Enable before Play Mode; select Record or Playback on SessionReplay.")]
     public bool runBenchmark;
+    public bool captureWithPresentMon;
+    [Tooltip("Absolute path, or relative to the project/build directory.")]
+    public string presentMonPath = "Tools/PresentMon/PresentMon-2.6.0-x64.exe";
+    public float captureReadyTimeout = 30f;
+    public float stabilizationSeconds = 1f;
+    public float captureTailSeconds = 2f;
+    PresentMonCapture capture;
+    bool preparingCapture;
+    bool finalizingCapture;
+
+    float originalTimeScale;
+    InputHandler captureInput;
+    PlayerMovement captureMovement;
     public BenchmarkScenario scenario;
     public EnemyAllocation allocation;
     public EnemyFactory factory;
@@ -118,6 +133,15 @@ BenchmarkSchedule schedule;
             for (int slot = 0; slot < active.Length; slot++) Spawn(slot, schedule.initialPoints[slot]);
             preparation.Stop();
             preparationMilliseconds = (float)preparation.Elapsed.TotalMilliseconds;
+            if (captureWithPresentMon)
+            {
+                if (Application.platform != RuntimePlatform.WindowsPlayer)
+                    throw new InvalidOperationException("PresentMon capture requires a Windows standalone build, not the Unity Editor.");
+                if (Time.timeScale != 1f || captureReadyTimeout <= 0 || stabilizationSeconds < 0 || captureTailSeconds < 0)
+                    throw new InvalidOperationException("Capture requires timeScale 1 and valid capture timings.");
+                StartCoroutine(PrepareCapture());
+                return;
+            }
             if (!replay.BeginBenchmark()) throw new InvalidOperationException("Replay could not start; check its file and duration.");
             status = "Running";
             running = true;
@@ -135,6 +159,12 @@ BenchmarkSchedule schedule;
 
     void Update()
     {
+        if (running && capture != null && (Time.timeScale != 1f || !Application.isFocused || capture.Exited))
+        {
+
+            Finish("Invalid: pause, focus loss or capture exit");
+            return;
+        }
         if (!running || Time.timeScale == 0f) return;
         if (!replay.IsPlaying && !replay.IsRecording) { Finish("Stopped"); return; }
         float elapsed = Mathf.Min(Time.time - replay.StartedAt, duration);
@@ -192,7 +222,16 @@ BenchmarkSchedule schedule;
 
     void Finish(string result)
     {
+        if (finalizingCapture) return;
         running = false;
+        if (capture != null)
+        {
+            capture.MarkEnd(result);
+            finalizingCapture = true;
+            status = "Finalizing capture";
+            StartCoroutine(FinalizeCapture());
+            return;
+        }
         status = result;
         replay.Stop();
         Debug.Log("Benchmark " + result + ": spawned=" + spawned + ", removed=" + removed +
@@ -213,8 +252,127 @@ BenchmarkSchedule schedule;
         ownsPlayer = false;
     }
 
+    IEnumerator PrepareCapture()
+    {
+        preparingCapture = true;
+        status = "Waiting for PresentMon";
+        originalTimeScale = Time.timeScale;
+        Time.timeScale = 0f;
+        captureInput = FindObjectOfType<InputHandler>();
+        captureMovement = FindObjectOfType<PlayerMovement>();
+        if (captureInput != null) captureInput.ReplayControlsInput = true;
+        if (captureMovement != null) captureMovement.ReplayControlsInput = true;
+        bool started = false;
+        try
+        {
+            capture = new PresentMonCapture();
+            capture.Run.scenario = scenario.name;
+            capture.Run.scenarioConfiguration = JsonUtility.ToJson(scenario);
+            capture.Run.allocation = selectedAllocation.ToString();
+            capture.Run.replayFile = replay.FilePath;
+            capture.Run.seed = scenario.seed;
+            capture.Run.enemyCount = scenario.enemyCount;
+            capture.Run.duration = duration;
+            string root = Path.GetDirectoryName(Application.dataPath);
+            string executable = Path.IsPathRooted(presentMonPath) ? presentMonPath : Path.Combine(root, presentMonPath);
+            capture.Start(executable, Path.Combine(Application.persistentDataPath, "Benchmarks"));
+            started = true;
+        }
+        catch (Exception e)
+        {
+            if (capture != null) { capture.Run.result = "CaptureFailed"; capture.Run.error = e.Message; }
+            Debug.LogError("PresentMon startup failed: " + e.Message, this);
+        }
+        float deadline = Time.realtimeSinceStartup + captureReadyTimeout;
+        while (started && !capture.Ready && !capture.Exited && Time.realtimeSinceStartup < deadline)
+        {
+            if (Input.GetKeyDown(replay.stopKey)) { started = false; break; }
+            yield return null;
+        }
+        bool ready = started && capture.Ready && !capture.Exited;
+        if (ready)
+        {
+            float until = Time.realtimeSinceStartup + stabilizationSeconds;
+            while (Time.realtimeSinceStartup < until)
+            {
+                if (Input.GetKeyDown(replay.stopKey) || capture.Exited) { ready = false; break; }
+                yield return null;
+            }
+        }
+        // Leave the preparation frame before starting the measured session.
+        yield return null;
+        ready = ready && Time.timeScale == 0f && !capture.Exited;
+        RestorePreparation();
+        if (!ready || !Application.isFocused)
+        {
+            status = "Failed";
+            Debug.LogError("PresentMon did not become ready. Check capture.log and ETW permissions.", this);
+            if (capture != null)
+            {
+                capture.Run.result = "CaptureFailed";
+                if (string.IsNullOrEmpty(capture.Run.error)) capture.Run.error = "Readiness cancelled, timed out or lost focus. " + capture.Error;
+                capture.Dispose(); capture = null;
+            }
+            Cleanup();
+            yield break;
+        }
+        replay.Stopping += ReplayStopping;
+        if (!replay.BeginBenchmark()) { Finish("Failed"); yield break; }
+        capture.MarkStart();
+        status = "Running";
+        running = true;
+    }
+
+    void ReplayStopping()
+    {
+        if (capture == null || finalizingCapture) return;
+        capture.MarkEnd("Stopped");
+    }
+
+    IEnumerator FinalizeCapture()
+    {
+        // End marker precedes Stop/save/cleanup. Tail permits in-flight GPU/display events to arrive.
+        yield return null;
+        replay.Stopping -= ReplayStopping;
+        replay.Stop();
+        float until = Time.realtimeSinceStartup + captureTailSeconds;
+        while (Time.realtimeSinceStartup < until) yield return null;
+        capture.RequestStop();
+        float deadline = Time.realtimeSinceStartup + 10f;
+        while (!capture.Exited && Time.realtimeSinceStartup < deadline) yield return null;
+        try
+        {
+            if (!capture.Exited) throw new TimeoutException("PresentMon termination timed out.");
+            capture.Complete();
+            status = capture.Run.result;
+            Debug.Log("PresentMon " + status + ": " + capture.DirectoryPath, this);
+        }
+        catch (Exception e) { status = "Failed"; Debug.LogError(e.Message, this); }
+        finally { capture.Dispose(); capture = null; finalizingCapture = false; Cleanup(); }
+    }
+
+    void RestorePreparation()
+    {
+        if (!preparingCapture) return;
+        preparingCapture = false;
+        Time.timeScale = originalTimeScale;
+        if (captureInput != null) captureInput.ReplayControlsInput = false;
+        if (captureMovement != null) captureMovement.ReplayControlsInput = false;
+    }
+
     void OnDisable()
     {
-        if (running) Finish("Stopped");
+        StopAllCoroutines();
+        RestorePreparation();
+        if (capture != null)
+        {
+            capture.Run.result = "Aborted";
+            capture.MarkEnd("Aborted");
+            replay.Stopping -= ReplayStopping;
+            capture.Dispose(); capture = null;
+            running = finalizingCapture = false;
+            Cleanup();
+        }
+        else if (running) Finish("Stopped");
     }
 }

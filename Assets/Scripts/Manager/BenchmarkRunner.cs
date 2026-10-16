@@ -60,6 +60,19 @@ BenchmarkSchedule schedule;
 
     void Awake()
     {
+        if (BenchmarkLaunch.Applies)
+        {
+            runBenchmark = !BenchmarkLaunch.NormalGame;
+            captureWithPresentMon = runBenchmark && BenchmarkLaunch.Capture;
+            if (runBenchmark)
+            {
+                scenario = BenchmarkLaunch.Scenario;
+                allocation = BenchmarkLaunch.Allocation;
+                presentMonPath = BenchmarkLaunch.PresentMonPath;
+            }
+            // SessionReplay (-1000) has already consumed its selection before this Awake (-900).
+            BenchmarkLaunch.Clear();
+        }
         selected = runBenchmark;
         if (!selected) return;
         if (replay == null) replay = FindObjectOfType<SessionReplay>();

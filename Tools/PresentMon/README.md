@@ -12,6 +12,31 @@ itself, modifies user groups, or terminates unrelated ETW sessions.
 
 ## Setup (one Windows build run)
 
+The build now starts in Assets/Scenes/BenchmarkMenu.unity, followed by Level_01.
+Use Play normal game to load normal gameplay with waves and power-ups. This explicitly
+disables BenchmarkRunner and replay startup, regardless of the scene's saved benchmark
+settings. It requires neither a replay nor PresentMon and keeps normal frame settings.
+Build once with both scenes enabled in that order. The menu lists all four scenario
+assets and lets each run select Instantiate/Destroy or Pool without rebuilding.
+It lists JSON files in Application.persistentDataPath/Replays. Select a file, change
+the folder and Refresh, or enter an absolute replay file path directly. The menu
+validates the recording against Level_01 before loading gameplay. Duration comes
+from that recording. Menu launches always use Playback and never overwrite recordings.
+
+Capture with PresentMon is on by default. Copy Tools/PresentMon beside the game exe
+or enter an absolute executable path in the menu. Disable capture to exercise the
+menu in the Unity Editor. Click Start benchmark to load gameplay; menu/scene loading
+and pool preparation remain outside the measured interval. Restart the application
+for each comparison run and choose the same scenario/replay with the other allocation.
+Results still go to Application.persistentDataPath/Benchmarks in unique folders.
+There is no automatic repeat or return to menu after completion. Esc exits the build.
+
+Opening Level_01 directly in the Editor still uses its Inspector settings, including
+Record mode for making new recordings. The menu overrides apply only to the next
+gameplay scene initialization and do not change saved assets or scene settings.
+
+For direct scene testing without the menu:
+
 1. Configure BenchmarkRunner as usual: Run Benchmark, scenario, allocation and
    SessionReplay Record/Playback. Playback is recommended for performance comparison.
 2. Enable Capture With Present Mon on BenchmarkRunner before building.

@@ -81,7 +81,9 @@ public class SessionReplay : MonoBehaviour
         else StartPlayback();
         return IsRecording || IsPlaying;
     }
-    public string FilePath { get { return Path.Combine(Application.persistentDataPath, "Replays", Path.GetFileName(fileName)); } }
+    string playbackPath;
+    public string FilePath { get { return selectedMode == ReplayStartupMode.Playback && !string.IsNullOrEmpty(playbackPath)
+        ? playbackPath : Path.Combine(Application.persistentDataPath, "Replays", Path.GetFileName(fileName)); } }
 
     InputHandler input;
     PlayerMovement movement;
@@ -100,6 +102,11 @@ public class SessionReplay : MonoBehaviour
 
     void Awake()
     {
+        if (BenchmarkLaunch.Applies)
+        {
+            startupMode = BenchmarkLaunch.NormalGame ? ReplayStartupMode.Normal : ReplayStartupMode.Playback;
+            playbackPath = BenchmarkLaunch.NormalGame ? null : BenchmarkLaunch.ReplayPath;
+        }
         selectedMode = startupMode;
         if (selectedMode == ReplayStartupMode.Normal) return;
 
@@ -310,7 +317,12 @@ public class SessionReplay : MonoBehaviour
 
     static void Validate(ReplaySession data)
     {
-        if (data == null || !data.powerUpsDisabled || data.scene != SceneManager.GetActiveScene().name ||
+        ValidateForScene(data, SceneManager.GetActiveScene().name);
+    }
+
+    public static void ValidateForScene(ReplaySession data, string sceneName)
+    {
+        if (data == null || !data.powerUpsDisabled || data.scene != sceneName ||
             !Finite(data.duration) || data.duration < 0f || data.frames == null || data.frames.Count == 0 || data.shots == null)
             throw new InvalidDataException("Invalid replay data: check scene, duration, frames and disabled power-ups.");
         float previous = -1f;

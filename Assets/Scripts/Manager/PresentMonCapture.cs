@@ -15,6 +15,7 @@ public class PresentMonRun
     public string scenario, allocation, replayFile, result = "Incomplete", error, session;
     public string scenarioConfiguration;
     public int processId, seed, enemyCount;
+    public int vSyncCount, targetFrameRate;
     public float duration;
     public long frequency, startQpc, endQpc;
     public int filteredFrames;

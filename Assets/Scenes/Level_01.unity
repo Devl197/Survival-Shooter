@@ -7502,7 +7502,7 @@ MonoBehaviour:
   captureReadyTimeout: 30
   stabilizationSeconds: 1
   captureTailSeconds: 2
-  scenario: {fileID: 11400000, guid: b59331d87dc84d41aba6e734eacde003, type: 2}
+  scenario: {fileID: 11400000, guid: afabb46e8d104d81acf5b908782224f2, type: 2}
   allocation: 1
   factory: {fileID: 2104151172}
   spawner: {fileID: 2140000004}

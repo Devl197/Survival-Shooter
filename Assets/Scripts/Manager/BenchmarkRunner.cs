@@ -22,6 +22,9 @@ public class BenchmarkRunner : MonoBehaviour
     bool finalizingCapture;
 
     float originalTimeScale;
+    int originalVSyncCount;
+    int originalTargetFrameRate;
+    bool ownsFrameSettings;
     InputHandler captureInput;
     PlayerMovement captureMovement;
     public BenchmarkScenario scenario;
@@ -80,6 +83,11 @@ BenchmarkSchedule schedule;
         var preparation = System.Diagnostics.Stopwatch.StartNew();
         try
         {
+            originalVSyncCount = QualitySettings.vSyncCount;
+            originalTargetFrameRate = Application.targetFrameRate;
+            ownsFrameSettings = true;
+            QualitySettings.vSyncCount = 0;
+            Application.targetFrameRate = -1;
             if (scenario == null || spawner == null || factory == null || replay == null || !replay.isActiveAndEnabled ||
                 replay.startupMode == ReplayStartupMode.Normal || factory.enemyPrefab == null ||
                 factory.spawnPoints == null || scenario.typeWeights == null ||
@@ -242,6 +250,7 @@ BenchmarkSchedule schedule;
 
     void Cleanup()
     {
+        RestoreFrameSettings();
         if (spawner != null) spawner.Clear();
         activeCount = 0;
         active = null;
@@ -250,6 +259,14 @@ BenchmarkSchedule schedule;
         dying.Clear();
         if (ownsPlayer && player != null) player.BenchmarkInvulnerable = originalInvulnerability;
         ownsPlayer = false;
+    }
+
+    void RestoreFrameSettings()
+    {
+        if (!ownsFrameSettings) return;
+        QualitySettings.vSyncCount = originalVSyncCount;
+        Application.targetFrameRate = originalTargetFrameRate;
+        ownsFrameSettings = false;
     }
 
     IEnumerator PrepareCapture()
@@ -273,6 +290,8 @@ BenchmarkSchedule schedule;
             capture.Run.seed = scenario.seed;
             capture.Run.enemyCount = scenario.enemyCount;
             capture.Run.duration = duration;
+            capture.Run.vSyncCount = QualitySettings.vSyncCount;
+            capture.Run.targetFrameRate = Application.targetFrameRate;
             string root = Path.GetDirectoryName(Application.dataPath);
             string executable = Path.IsPathRooted(presentMonPath) ? presentMonPath : Path.Combine(root, presentMonPath);
             capture.Start(executable, Path.Combine(Application.persistentDataPath, "Benchmarks"));
@@ -374,5 +393,6 @@ BenchmarkSchedule schedule;
             Cleanup();
         }
         else if (running) Finish("Stopped");
+        RestoreFrameSettings();
     }
 }

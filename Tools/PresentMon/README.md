@@ -26,6 +26,29 @@ itself, modifies user groups, or terminates unrelated ETW sessions.
 No automatic repeats. Existing benchmarks work without PresentMon when its checkbox
 is off. The executable is not automatically copied by Unity's build pipeline.
 
+## Uncapped benchmark and replacement scenarios
+
+BenchmarkRunner temporarily sets QualitySettings.vSyncCount to 0 and
+Application.targetFrameRate to -1 before preparation, with or without PresentMon.
+Previous values are restored after finalization, failure or component disable.
+Normal gameplay and saved Quality settings are unchanged. External driver/RTSS limits
+must be disabled separately. New session.json files record vSyncCount and targetFrameRate.
+
+Select a scenario asset from Assets/Scripts/ScriptableObjects in BenchmarkRunner:
+
+| Asset | Pattern | Population | Group | Interval | Replacement load |
+| --- | --- | --- | --- | --- | --- |
+| BenchmarkContinuous | Continuous | 300 | 10 | 2 s | 5/s |
+| BenchmarkFrequent | Continuous | 300 | 30 | 0.5 s | 60/s, spread across the interval |
+| BenchmarkGrouped | Burst | 300 | 60 | 1 s | 60 together each second |
+
+The two new scenarios retain seed 12345, equal type weights, initial lifetime 5 s
+and death duration 2 s. First deaths start at 5 s; replacements start at 7 s.
+Duration comes from the replay; replacements that cannot finish before its end are
+excluded. Assign the scenario explicitly; existing scene selections are preserved.
+Compare InstantiateDestroy and Pool using the same replay and graphics settings.
+These are proposed stress workloads, not a guarantee that pooling improves FPS.
+
 ## Timing and output
 
 After schedule/pool/initial population preparation, simulation is held at timeScale 0

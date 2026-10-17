@@ -296,6 +296,7 @@ BenchmarkSchedule schedule;
         try
         {
             capture = new PresentMonCapture();
+            RecordPathUpdateSettings(capture.Run);
             capture.Run.scenario = scenario.name;
             capture.Run.scenarioConfiguration = JsonUtility.ToJson(scenario);
             capture.Run.allocation = selectedAllocation.ToString();
@@ -353,6 +354,26 @@ BenchmarkSchedule schedule;
         capture.MarkStart();
         status = "Running";
         running = true;
+    }
+
+    void RecordPathUpdateSettings(PresentMonRun run)
+    {
+        // Read the actual spawned enemies, including runs started directly in the gameplay scene.
+        // A single pair of metadata fields cannot describe mixed AI settings accurately.
+        for (int i = 0; i < active.Length; i++)
+        {
+            var movement = active[i].GetComponent<EnemyMovement>();
+            if (movement == null) throw new InvalidOperationException("Benchmark enemy is missing EnemyMovement.");
+            bool periodic = movement.PeriodicPathUpdates;
+            float interval = movement.PathUpdateInterval;
+            if (i == 0)
+            {
+                run.periodicPathUpdates = periodic;
+                run.pathUpdateIntervalSeconds = interval;
+            }
+            else if (run.periodicPathUpdates != periodic || run.pathUpdateIntervalSeconds != interval)
+                throw new InvalidOperationException("Benchmark enemies must share the same path update settings.");
+        }
     }
 
     void ReplayStopping()

@@ -3,6 +3,8 @@
 public class EnemyMovement : MonoBehaviour
 {
     [SerializeField] EnemyPathUpdateSettings pathUpdateSettings;
+    public bool PeriodicPathUpdates { get { return pathUpdateSettings != null && pathUpdateSettings.periodicUpdates; } }
+    public float PathUpdateInterval { get { return pathUpdateSettings != null ? pathUpdateSettings.Interval : 0f; } }
     float lastPathUpdate;
     bool hasRequestedPath;
     Transform player;
@@ -36,7 +38,7 @@ public class EnemyMovement : MonoBehaviour
         {
             if (!nav.isActiveAndEnabled || !nav.isOnNavMesh) return;
 
-            bool periodic = pathUpdateSettings != null && pathUpdateSettings.periodicUpdates;
+            bool periodic = PeriodicPathUpdates;
             if (!periodic || !hasRequestedPath ||
                 Time.time - lastPathUpdate >= pathUpdateSettings.Interval)
             {

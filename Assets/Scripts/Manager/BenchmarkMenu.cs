@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.IO;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -19,6 +20,9 @@ public static class BenchmarkLaunch
 
 public class BenchmarkMenu : MonoBehaviour
 {
+    public EnemyPathUpdateSettings pathUpdateSettings;
+    bool periodicPathUpdates;
+    string pathUpdateInterval = "0.2";
     public BenchmarkScenario[] scenarios;
     public string gameScene = "Level_01";
     string folder, replayPath = "", error = "";
@@ -31,6 +35,9 @@ public class BenchmarkMenu : MonoBehaviour
     void Awake()
     {
         BenchmarkLaunch.Clear();
+        periodicPathUpdates = pathUpdateSettings != null && pathUpdateSettings.periodicUpdates;
+        if (pathUpdateSettings != null)
+            pathUpdateInterval = pathUpdateSettings.Interval.ToString("R", CultureInfo.InvariantCulture);
         folder = Path.Combine(Application.persistentDataPath, "Replays");
         RefreshFiles();
         var cameraObject = new GameObject("Menu Camera");
@@ -84,6 +91,7 @@ public class BenchmarkMenu : MonoBehaviour
             BenchmarkLaunch.Scene = gameScene;
             BenchmarkLaunch.Capture = capture;
             BenchmarkLaunch.PresentMonPath = presentMonPath;
+            ApplyPathUpdateSettings();
             loading = true;
             SceneManager.LoadScene(gameScene);
         }
@@ -99,10 +107,30 @@ public class BenchmarkMenu : MonoBehaviour
             BenchmarkLaunch.Clear();
             BenchmarkLaunch.NormalGame = true;
             BenchmarkLaunch.Scene = gameScene;
+            ApplyPathUpdateSettings();
             loading = true;
             SceneManager.LoadScene(gameScene);
         }
         catch (Exception e) { BenchmarkLaunch.Clear(); loading = false; error = e.Message; }
+    }
+
+    void ApplyPathUpdateSettings()
+    {
+        if (pathUpdateSettings == null)
+            throw new InvalidOperationException("Assign the shared enemy path update settings asset.");
+        float interval;
+        if (!TryGetPathUpdateInterval(out interval))
+            throw new InvalidOperationException("Path update interval must be a finite number of at least 0.01 seconds.");
+        pathUpdateSettings.updateInterval = interval;
+        pathUpdateSettings.periodicUpdates = periodicPathUpdates;
+    }
+
+    bool TryGetPathUpdateInterval(out float interval)
+    {
+        // Accept either decimal separator without interpreting commas as thousands.
+        return float.TryParse(pathUpdateInterval.Replace(',', '.'), NumberStyles.Float,
+            CultureInfo.InvariantCulture, out interval) &&
+            !float.IsNaN(interval) && !float.IsInfinity(interval) && interval >= 0.01f;
     }
 
     void OnGUI()
@@ -115,6 +143,19 @@ public class BenchmarkMenu : MonoBehaviour
         scroll = GUILayout.BeginScrollView(scroll);
         GUILayout.Label("SURVIVAL SHOOTER", new GUIStyle(GUI.skin.label) { fontSize = 24 });
         GUI.enabled = !loading;
+        periodicPathUpdates = GUILayout.Toggle(periodicPathUpdates, "Periodic enemy path updates (normal game and benchmark)");
+        GUILayout.BeginHorizontal();
+        GUILayout.Label("Path update interval (seconds)", GUILayout.Width(240));
+        pathUpdateInterval = GUILayout.TextField(pathUpdateInterval, GUILayout.Width(160));
+        GUILayout.EndHorizontal();
+        GUILayout.Label("Minimum 0.01 s; use a decimal point or comma. Periodic updates off: update every frame.");
+        float parsedInterval;
+        bool validInterval = TryGetPathUpdateInterval(out parsedInterval);
+        if (!validInterval)
+            GUILayout.Label("Enter a finite interval of at least 0.01 seconds.",
+                new GUIStyle(GUI.skin.label) { normal = { textColor = new Color(1, .65f, .45f) } });
+        GUILayout.Space(10);
+        GUI.enabled = !loading && validInterval;
         if (GUILayout.Button("Play normal game", GUILayout.Height(44))) LaunchNormalGame();
         GUI.enabled = true;
         GUILayout.Label("Normal gameplay uses waves and power-ups. No replay or PresentMon is required.");
@@ -157,7 +198,7 @@ public class BenchmarkMenu : MonoBehaviour
         }
         GUILayout.Space(12);
         if (!string.IsNullOrEmpty(error)) GUILayout.Label(error, new GUIStyle(GUI.skin.label) { wordWrap = true, normal = { textColor = new Color(1, .65f, .45f) } });
-        GUI.enabled = !loading;
+        GUI.enabled = !loading && validInterval;
         if (GUILayout.Button(loading ? "Loading..." : "Start benchmark", GUILayout.Height(44))) Launch();
         GUI.enabled = true;
         if (GUILayout.Button("Quit", GUILayout.Height(30))) Application.Quit();

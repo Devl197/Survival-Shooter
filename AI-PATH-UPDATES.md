@@ -3,11 +3,18 @@
 Select `Assets/Scripts/ScriptableObjects/EnemyPathUpdates.asset` in Unity.
 All three gameplay enemy prefabs share this asset.
 
-- **Periodic Updates off** (default): call `SetDestination` every frame, as before.
+- **Periodic Updates off**: call `SetDestination` every frame, as before.
 - **Periodic Updates on**: call it every **Update Interval** seconds (default 0.2).
 - Change either field during Play Mode to apply it to all active and future enemies.
   Asset edits in Play Mode can persist after stopping; restore the desired defaults.
-- For standalone comparisons, set the asset before building each variant.
+- In the starting test menu, toggle **Periodic enemy path updates** before starting
+  either normal gameplay or a benchmark. The initial selection and displayed
+  interval come from this asset; one build supports both modes. Edit **Path update
+  interval (seconds)** in the menu to test different intervals with the same build.
+  Decimal points and commas are accepted (for example `0.2` or `0,2`); values must
+  be finite and at least `0.01`. Invalid input disables both start buttons. The
+  interval is applied alongside the toggle when launching either mode and is
+  recorded in the existing `pathUpdateIntervalSeconds` benchmark metadata field.
 
 The first destination request after each spawn/pool activation is immediate.
 Enemies keep moving along their existing path between requests. Death is still
@@ -18,8 +25,12 @@ repath behavior is unchanged; this setting only throttles explicit destination r
 
 This is a gameplay setting with no dependency on BenchmarkRunner, scenarios,
 replay, or allocation mode. It applies equally in ordinary gameplay and benchmarks.
-Benchmark reports do not record this setting; label comparison runs with the
-mode and interval yourself.
+PresentMon `session.json` reports include `periodicPathUpdates` (boolean) and
+`pathUpdateIntervalSeconds` (configured, validated interval in seconds, even when
+periodic updates are disabled). These describe the spawned enemies at capture
+preparation, including launches directly from the gameplay scene. Keep settings
+unchanged throughout a measured run. Older reports lack these fields and should
+be treated as unknown, not automatically as disabled.
 
 ## Verification in Unity
 

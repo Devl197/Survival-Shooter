@@ -43,6 +43,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 682618cea62341749d662adc8b1e87cd, type: 3}
   m_Name:
   m_EditorClassIdentifier:
+  pathUpdateSettings: {fileID: 11400000, guid: 0cac7814eb5a45fba50a9be330d35bf5, type: 2}
   scenarios:
   - {fileID: 11400000, guid: b59331d87dc84d41aba6e734eacde003, type: 2}
   - {fileID: 11400000, guid: b59331d87dc84d41aba6e734eacde004, type: 2}

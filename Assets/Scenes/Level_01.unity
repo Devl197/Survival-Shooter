@@ -7480,7 +7480,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e046f06f99334197bc8428ac75aa8f20, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  startupMode: 2
+  startupMode: 0
   recordingDuration: 30
   fileName: session.json
   stopKey: 289
@@ -7496,8 +7496,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b59331d87dc84d41aba6e734eacde002, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  runBenchmark: 1
-  captureWithPresentMon: 1
+  runBenchmark: 0
+  captureWithPresentMon: 0
   presentMonPath: E:\Master\Unity\Survival-Shooter\Tools\PresentMon\PresentMon-2.6.0-x64.exe
   captureReadyTimeout: 30
   stabilizationSeconds: 1

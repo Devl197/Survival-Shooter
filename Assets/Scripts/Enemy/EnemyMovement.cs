@@ -2,6 +2,9 @@
 
 public class EnemyMovement : MonoBehaviour
 {
+    [SerializeField] EnemyPathUpdateSettings pathUpdateSettings;
+    float lastPathUpdate;
+    bool hasRequestedPath;
     Transform player;
     PlayerHealth playerHealth;
     EnemyHealth enemyHealth;
@@ -20,12 +23,27 @@ public class EnemyMovement : MonoBehaviour
     }
 
 
+    void OnEnable()
+    {
+        // Also reset when an enemy is reused from the pool.
+        hasRequestedPath = false;
+    }
+
     void Update()
     {
         //Pindah ke player position
         if (enemyHealth.currentHealth > 0 && playerHealth.currentHealth > 0)
         {
-            nav.SetDestination(player.position);
+            if (!nav.isActiveAndEnabled || !nav.isOnNavMesh) return;
+
+            bool periodic = pathUpdateSettings != null && pathUpdateSettings.periodicUpdates;
+            if (!periodic || !hasRequestedPath ||
+                Time.time - lastPathUpdate >= pathUpdateSettings.Interval)
+            {
+                nav.SetDestination(player.position);
+                lastPathUpdate = Time.time;
+                hasRequestedPath = true;
+            }
         }
         else //Stop moving
         {

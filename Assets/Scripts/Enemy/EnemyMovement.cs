@@ -42,7 +42,8 @@ public class EnemyMovement : MonoBehaviour
             if (!periodic || !hasRequestedPath ||
                 Time.time - lastPathUpdate >= pathUpdateSettings.Interval)
             {
-                nav.SetDestination(player.position);
+                using (new EnemyProfilerSample("Enemy.Navigation.SetDestination"))
+                    nav.SetDestination(player.position);
                 lastPathUpdate = Time.time;
                 hasRequestedPath = true;
             }

@@ -14,6 +14,10 @@ public class PresentMonRun
     public string toolSha256 = "b2a706bc6ad475749e3b7e3409263aa1e6906d45bdcf993f6dbc0f660188f1af";
     public string scenario, allocation, replayFile, result = "Incomplete", error, session;
     public string scenarioConfiguration;
+    public bool enemyCullingOverridden;
+    public string animatorCullingMode;
+    // These booleans describe the override only when enemyCullingOverridden is true.
+    public bool updateWhenOffscreen, skinnedMotionVectors;
     public bool periodicPathUpdates;
     public float pathUpdateIntervalSeconds;
     public int processId, seed, enemyCount;

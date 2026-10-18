@@ -11,8 +11,11 @@ public static class BenchmarkLaunch
     public static EnemyAllocation Allocation;
     public static string ReplayPath, Scene, PresentMonPath;
     public static bool Capture, NormalGame;
+    public static AnimatorCullingMode AnimatorCulling;
+    public static bool UpdateWhenOffscreen, SkinnedMotionVectors;
     public static bool Applies { get { return !string.IsNullOrEmpty(Scene) && SceneManager.GetActiveScene().name == Scene; } }
-    public static void Clear() { Scenario = null; ReplayPath = Scene = PresentMonPath = null; Capture = NormalGame = false; }
+    public static void Clear() { Scenario = null; ReplayPath = Scene = PresentMonPath = null; Capture = NormalGame = false;
+        AnimatorCulling = AnimatorCullingMode.CullUpdateTransforms; UpdateWhenOffscreen = false; SkinnedMotionVectors = true; }
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     static void Reset() { Clear(); }
@@ -30,7 +33,78 @@ public class BenchmarkMenu : MonoBehaviour
     string[] files = new string[0];
     int scenarioIndex, allocationIndex;
     bool capture = true, loading;
+    int animatorCullingIndex = 1;
+    bool updateWhenOffscreen, skinnedMotionVectors = true;
+    static readonly string[] CullingNames = { "Always Animate", "Cull Update Transforms", "Cull Completely" };
+    static readonly AnimatorCullingMode[] CullingModes = { AnimatorCullingMode.AlwaysAnimate,
+        AnimatorCullingMode.CullUpdateTransforms, AnimatorCullingMode.CullCompletely };
     Vector2 scroll;
+    string lastBenchmark = "";
+    static string PreferencesKey { get { return "BenchmarkMenu.v1." + (Application.isEditor ? "Editor" : "Player"); } }
+
+    [Serializable]
+    sealed class SavedSettings
+    {
+        public string scenario, folder, replayPath, presentMonPath, pathUpdateInterval;
+        public int allocation, culling;
+        public bool capture, periodicPathUpdates, updateWhenOffscreen, skinnedMotionVectors;
+    }
+
+    void LoadSettings()
+    {
+        lastBenchmark = PlayerPrefs.GetString(PreferencesKey + ".LastBenchmark", "");
+        if (!PlayerPrefs.HasKey(PreferencesKey)) return;
+        try
+        {
+            var saved = JsonUtility.FromJson<SavedSettings>(PlayerPrefs.GetString(PreferencesKey));
+            if (saved == null) return;
+            if (scenarios != null)
+            {
+                int index = Array.FindIndex(scenarios, s => s != null && s.name == saved.scenario);
+                if (index >= 0) scenarioIndex = index;
+            }
+            allocationIndex = Mathf.Clamp(saved.allocation, 0, 1);
+            animatorCullingIndex = Mathf.Clamp(saved.culling, 0, CullingModes.Length - 1);
+            folder = saved.folder ?? folder;
+            replayPath = saved.replayPath ?? replayPath;
+            presentMonPath = saved.presentMonPath ?? presentMonPath;
+            pathUpdateInterval = saved.pathUpdateInterval ?? pathUpdateInterval;
+            capture = saved.capture;
+            periodicPathUpdates = saved.periodicPathUpdates;
+            updateWhenOffscreen = saved.updateWhenOffscreen;
+            skinnedMotionVectors = saved.skinnedMotionVectors;
+        }
+        catch (Exception e) { Debug.LogWarning("Cannot restore benchmark menu settings: " + e.Message); }
+    }
+
+    void SaveSettings()
+    {
+        var saved = new SavedSettings {
+            scenario = scenarios != null && scenarioIndex >= 0 && scenarioIndex < scenarios.Length && scenarios[scenarioIndex] != null
+                ? scenarios[scenarioIndex].name : "",
+            folder = folder, replayPath = replayPath, presentMonPath = presentMonPath,
+            pathUpdateInterval = pathUpdateInterval, allocation = allocationIndex, culling = animatorCullingIndex,
+            capture = capture, periodicPathUpdates = periodicPathUpdates,
+            updateWhenOffscreen = updateWhenOffscreen, skinnedMotionVectors = skinnedMotionVectors
+        };
+        PlayerPrefs.SetString(PreferencesKey, JsonUtility.ToJson(saved));
+        PlayerPrefs.Save();
+    }
+
+    string DescribeBenchmark(string path)
+    {
+        return DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) + " (local)\n" +
+            "Scene: " + gameScene + " | " + scenarios[scenarioIndex].name + " | " + (EnemyAllocation)allocationIndex + "\n" +
+            "Animator: " + CullingNames[animatorCullingIndex] +
+            " | Offscreen: " + (updateWhenOffscreen ? "On" : "Off") +
+            " | Motion vectors: " + (skinnedMotionVectors ? "On" : "Off") + "\n" +
+            "Periodic AI: " + (periodicPathUpdates ? "On" : "Off") + " | Interval: " + pathUpdateInterval + " s\n" +
+            "PresentMon: " + (capture ? "On" : "Off") + " | Executable: " + presentMonPath + "\n" +
+            "Replay: " + path;
+    }
+
+    void OnDisable() { SaveSettings(); }
+    void OnApplicationQuit() { SaveSettings(); }
 
     void Awake()
     {
@@ -39,6 +113,7 @@ public class BenchmarkMenu : MonoBehaviour
         if (pathUpdateSettings != null)
             pathUpdateInterval = pathUpdateSettings.Interval.ToString("R", CultureInfo.InvariantCulture);
         folder = Path.Combine(Application.persistentDataPath, "Replays");
+        LoadSettings();
         RefreshFiles();
         var cameraObject = new GameObject("Menu Camera");
         var camera = cameraObject.AddComponent<Camera>();
@@ -91,9 +166,17 @@ public class BenchmarkMenu : MonoBehaviour
             BenchmarkLaunch.Scene = gameScene;
             BenchmarkLaunch.Capture = capture;
             BenchmarkLaunch.PresentMonPath = presentMonPath;
+            BenchmarkLaunch.AnimatorCulling = CullingModes[animatorCullingIndex];
+            BenchmarkLaunch.UpdateWhenOffscreen = updateWhenOffscreen;
+            BenchmarkLaunch.SkinnedMotionVectors = skinnedMotionVectors;
             ApplyPathUpdateSettings();
+            SaveSettings();
+            string description = DescribeBenchmark(path);
             loading = true;
             SceneManager.LoadScene(gameScene);
+            lastBenchmark = description;
+            PlayerPrefs.SetString(PreferencesKey + ".LastBenchmark", lastBenchmark);
+            PlayerPrefs.Save();
         }
         catch (Exception e) { BenchmarkLaunch.Clear(); loading = false; error = e.Message; }
     }
@@ -162,6 +245,11 @@ public class BenchmarkMenu : MonoBehaviour
         GUILayout.Space(14);
         GUILayout.Label("BENCHMARK", new GUIStyle(GUI.skin.label) { fontSize = 20 });
         GUILayout.Label("Choose settings, then start one measured playback. Restart the application for the next run.");
+        if (!string.IsNullOrEmpty(lastBenchmark))
+        {
+            GUILayout.Label("LAST LAUNCHED BENCHMARK (completion not tracked)");
+            GUILayout.Label(lastBenchmark, new GUIStyle(GUI.skin.label) { wordWrap = true });
+        }
         GUILayout.Space(14);
         GUILayout.Label("Scenario");
         if (scenarios != null)
@@ -178,6 +266,12 @@ public class BenchmarkMenu : MonoBehaviour
         GUILayout.Space(10);
         GUILayout.Label("Enemy allocation");
         allocationIndex = GUILayout.SelectionGrid(allocationIndex, new[] { "Instantiate / Destroy", "Pool" }, 2, GUILayout.Height(34));
+        GUILayout.Space(10);
+        GUILayout.Label("Animator Culling Mode (benchmark only)");
+        animatorCullingIndex = GUILayout.SelectionGrid(animatorCullingIndex, CullingNames, 3, GUILayout.Height(34));
+        updateWhenOffscreen = GUILayout.Toggle(updateWhenOffscreen, "Update When Offscreen");
+        skinnedMotionVectors = GUILayout.Toggle(skinnedMotionVectors, "Skinned Motion Vectors");
+        GUILayout.Label("Applied to all enemy animators and skinned meshes for this benchmark.");
         GUILayout.Space(10);
         GUILayout.Label("Replay folder");
         GUILayout.BeginHorizontal();

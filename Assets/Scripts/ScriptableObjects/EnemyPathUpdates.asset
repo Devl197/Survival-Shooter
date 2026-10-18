@@ -12,5 +12,5 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a6c794e9c73f4364b99d267728294e18, type: 3}
   m_Name: EnemyPathUpdates
   m_EditorClassIdentifier: 
-  periodicUpdates: 0
+  periodicUpdates: 1
   updateInterval: 0.5

@@ -1,5 +1,45 @@
 # Benchmark neprijatelja
 
+## Culling eksperimenti iz menija
+
+Meni pamti izbor scenarija, allocation, AI podesavanja, culling opcije, replay
+folder/fajl i PresentMon opcije/putanju pri pokretanju testa ili izlasku iz menija.
+Pri sledecem pokretanju automatski ih vraca iz PlayerPrefs. Editor i standalone
+build imaju odvojene kljuceve. Scenario se prepoznaje po imenu; ako vise ne postoji,
+ostaje prvi scenario. Nepostojeci replay ili alat ponovo se proveravaju pri startu.
+Prikaz LAST LAUNCHED BENCHMARK cuva vreme i konfiguraciju poslednjeg pokrenutog
+benchmarka, nezavisno od naknadnog menjanja opcija ili pokretanja normalne igre.
+To nije potvrda uspesnog zavrsetka testa; rezultat je u PresentMon session.json.
+
+Benchmark meni sada nudi Animator Culling Mode (Always Animate, Cull Update
+Transforms, Cull Completely), Update When Offscreen i Skinned Motion Vectors.
+Podrazumevano su izabrani Cull Update Transforms, offscreen iskljucen i motion
+vectors ukljucen. Izbor se primenjuje samo na benchmark instance, na sve njihove
+Animator i SkinnedMeshRenderer komponente, ukljucujuci neaktivnu decu, prewarm i
+kasnije kreirane neprijatelje. Prefabovi i normalna igra zadrzavaju svoja podesavanja.
+Za direktno pokretanje Level_01 ukljuciti Override Enemy Culling na BenchmarkRunner;
+bez toga koriste se podesavanja prefabova.
+
+PresentMon session.json belezi enemyCullingOverridden, animatorCullingMode,
+updateWhenOffscreen i skinnedMotionVectors. Kada je enemyCullingOverridden false,
+boolean vrednosti nisu opis prefabova i treba ih ignorisati.
+
+Za osnovni A/B/C eksperiment menjati samo Animator rezim, uz isti replay, kameru,
+scenario, allocation, AI interval i renderer opcije. Ponoviti svaki rezim 3-5 puta.
+Zasebno porediti pogled sa vecinom vidljivih i pogled sa vecinom nevidljivih
+neprijatelja; unutar svakog pogleda kamera mora biti ista za sve rezime.
+Offscreen i motion vectors testirati u odvojenim serijama.
+
+PresentMon koristiti za ukupno vreme frejma i percentile, bez profiler logovanja.
+Kratak Unity Profiler snimak je opciona dijagnostika Animation CPU troska i razloga
+za razliku, u zasebnom Development buildu. Postojeci argument za raw snimanje i
+dalje snima celu sesiju; automatski kratki odsecci nisu implementirani.
+Cull Completely moze odloziti animation event StartSinking u normalnoj igri;
+benchmark uklanjanje upravlja svojim rasporedom, nezavisno od tog eventa.
+
+Za dijagnostiku trzaja u Unity Profileru, markere i opciono snimanje u `.raw`
+fajl pogledati [PROFILING.md](PROFILING.md).
+
 U sceni Level_01, objekat SessionReplay sada ima i BenchmarkRunner komponentu.
 Benchmark je podrazumevano iskljucen (`Run Benchmark`), pa postojeca igra i
 samostalni replay zadrzavaju svoje ponasanje.

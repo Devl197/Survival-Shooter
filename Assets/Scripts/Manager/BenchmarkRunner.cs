@@ -12,12 +12,17 @@ public class BenchmarkRunner : MonoBehaviour
     [Tooltip("Enable before Play Mode; select Record or Playback on SessionReplay.")]
     public bool runBenchmark;
     public bool captureWithPresentMon;
+    public bool overrideEnemyCulling;
+    public AnimatorCullingMode animatorCulling = AnimatorCullingMode.CullUpdateTransforms;
+    public bool updateWhenOffscreen;
+    public bool skinnedMotionVectors = true;
     [Tooltip("Absolute path, or relative to the project/build directory.")]
     public string presentMonPath = "Tools/PresentMon/PresentMon-2.6.0-x64.exe";
     public float captureReadyTimeout = 30f;
     public float stabilizationSeconds = 1f;
     public float captureTailSeconds = 2f;
     PresentMonCapture capture;
+    BenchmarkProfilerCapture profilerCapture;
     bool preparingCapture;
     bool finalizingCapture;
 
@@ -69,6 +74,10 @@ BenchmarkSchedule schedule;
                 scenario = BenchmarkLaunch.Scenario;
                 allocation = BenchmarkLaunch.Allocation;
                 presentMonPath = BenchmarkLaunch.PresentMonPath;
+                overrideEnemyCulling = true;
+                animatorCulling = BenchmarkLaunch.AnimatorCulling;
+                updateWhenOffscreen = BenchmarkLaunch.UpdateWhenOffscreen;
+                skinnedMotionVectors = BenchmarkLaunch.SkinnedMotionVectors;
             }
             // SessionReplay (-1000) has already consumed its selection before this Awake (-900).
             BenchmarkLaunch.Clear();
@@ -145,6 +154,8 @@ BenchmarkSchedule schedule;
             originalInvulnerability = player.BenchmarkInvulnerable;
             player.BenchmarkInvulnerable = true;
             ownsPlayer = true;
+            if (overrideEnemyCulling)
+                spawner.ConfigureBenchmarkCulling(animatorCulling, updateWhenOffscreen, skinnedMotionVectors);
             spawner.Initialize(selectedAllocation);
             active = new EnemyHealth[scenario.enemyCount];
             var capacities = new int[factory.enemyPrefab.Length];
@@ -154,6 +165,7 @@ BenchmarkSchedule schedule;
             for (int slot = 0; slot < active.Length; slot++) Spawn(slot, schedule.initialPoints[slot]);
             preparation.Stop();
             preparationMilliseconds = (float)preparation.Elapsed.TotalMilliseconds;
+            profilerCapture = BenchmarkProfilerCapture.StartIfRequested();
             if (captureWithPresentMon)
             {
                 if (Application.platform != RuntimePlatform.WindowsPlayer)
@@ -198,15 +210,21 @@ BenchmarkSchedule schedule;
                 if (Mathf.Min(nextDeath, nextRemoval) > elapsed) break;
                 if (nextRemoval <= nextDeath)
                 {
-                    BenchmarkReplacement change = dying.Dequeue();
-                    Release(change.slot);
-                    Spawn(change.slot, change.spawnPoint);
+                    using (new EnemyProfilerSample("Benchmark.ReplaceEnemy"))
+                    {
+                        BenchmarkReplacement change = dying.Dequeue();
+                        Release(change.slot);
+                        Spawn(change.slot, change.spawnPoint);
+                    }
                 }
                 else
                 {
-                    BenchmarkReplacement change = schedule.replacements[nextEvent++];
-                    active[change.slot].BeginBenchmarkDeath();
-                    dying.Enqueue(change);
+                    using (new EnemyProfilerSample("Benchmark.BeginDeath"))
+                    {
+                        BenchmarkReplacement change = schedule.replacements[nextEvent++];
+                        active[change.slot].BeginBenchmarkDeath();
+                        dying.Enqueue(change);
+                    }
                 }
             }
         }
@@ -263,6 +281,11 @@ BenchmarkSchedule schedule;
 
     void Cleanup()
     {
+        if (profilerCapture != null)
+        {
+            profilerCapture.Dispose();
+            profilerCapture = null;
+        }
         RestoreFrameSettings();
         if (spawner != null) spawner.Clear();
         activeCount = 0;
@@ -297,6 +320,10 @@ BenchmarkSchedule schedule;
         {
             capture = new PresentMonCapture();
             RecordPathUpdateSettings(capture.Run);
+            capture.Run.enemyCullingOverridden = overrideEnemyCulling;
+            capture.Run.animatorCullingMode = overrideEnemyCulling ? animatorCulling.ToString() : "Prefab settings";
+            capture.Run.updateWhenOffscreen = updateWhenOffscreen;
+            capture.Run.skinnedMotionVectors = skinnedMotionVectors;
             capture.Run.scenario = scenario.name;
             capture.Run.scenarioConfiguration = JsonUtility.ToJson(scenario);
             capture.Run.allocation = selectedAllocation.ToString();

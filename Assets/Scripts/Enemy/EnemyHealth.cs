@@ -24,20 +24,32 @@ public class EnemyHealth : MonoBehaviour
 
     public void ResetForSpawn(bool benchmark, EnemySpawner spawner, Action onDied)
     {
-        CancelInvoke();
-        StopAllCoroutines();
-        currentHealth = startingHealth;
-        isDead = isSinking = false;
-        _onDied = onDied;
-        BenchmarkImmortal = benchmark;
-        owner = spawner;
-        capsuleCollider.isTrigger = false;
-        enemyAudio.Stop();
-        enemyAudio.clip = originalClip;
-        hitParticles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
-        hitParticles.transform.localPosition = originalParticlePosition;
-        anim.Rebind();
-        anim.Update(0f);
+        using (new EnemyProfilerSample("Enemy.Health.ResetForSpawn"))
+        {
+            CancelInvoke();
+            StopAllCoroutines();
+            currentHealth = startingHealth;
+            isDead = isSinking = false;
+            _onDied = onDied;
+            BenchmarkImmortal = benchmark;
+            owner = spawner;
+            using (new EnemyProfilerSample("Enemy.Physics.ResetCollider"))
+                capsuleCollider.isTrigger = false;
+            using (new EnemyProfilerSample("Enemy.Effects.Reset"))
+            {
+                enemyAudio.Stop();
+                enemyAudio.clip = originalClip;
+                hitParticles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+                hitParticles.transform.localPosition = originalParticlePosition;
+            }
+            using (new EnemyProfilerSample("Enemy.Animator.Reset"))
+            {
+                using (new EnemyProfilerSample("Enemy.Animator.Rebind"))
+                    anim.Rebind();
+                using (new EnemyProfilerSample("Enemy.Animator.UpdateZero"))
+                    anim.Update(0f);
+            }
+        }
     }
 
 
@@ -74,12 +86,19 @@ public class EnemyHealth : MonoBehaviour
     public void BeginBenchmarkDeath()
     {
         if (isDead) return;
-        currentHealth = 0;
-        var agent = GetComponent<UnityEngine.AI.NavMeshAgent>();
-        if (agent.isOnNavMesh) agent.ResetPath();
-        agent.enabled = false;
-        GetComponent<Rigidbody>().isKinematic = true;
-        Death();
+        using (new EnemyProfilerSample("Enemy.Health.BeginBenchmarkDeath"))
+        {
+            currentHealth = 0;
+            using (new EnemyProfilerSample("Enemy.Navigation.StopForDeath"))
+            {
+                var agent = GetComponent<UnityEngine.AI.NavMeshAgent>();
+                if (agent.isOnNavMesh) agent.ResetPath();
+                agent.enabled = false;
+            }
+            using (new EnemyProfilerSample("Enemy.Physics.FreezeForDeath"))
+                GetComponent<Rigidbody>().isKinematic = true;
+            Death();
+        }
     }
 
     public void TakeDamage(int amount, Vector3 hitPoint)
@@ -114,7 +133,8 @@ public class EnemyHealth : MonoBehaviour
         isDead = true;
 
         //SetCapcollider ke trigger
-        capsuleCollider.isTrigger = true;
+        using (new EnemyProfilerSample("Enemy.Physics.DeathCollider"))
+            capsuleCollider.isTrigger = true;
 
         //trigger play animation Dead
         anim.SetTrigger("Dead");

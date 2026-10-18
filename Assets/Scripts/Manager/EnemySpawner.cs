@@ -23,6 +23,19 @@ public class EnemySpawner : MonoBehaviour
     readonly Dictionary<EnemyHealth, Entry> entries = new Dictionary<EnemyHealth, Entry>();
     Stack<Entry>[] pools;
     EnemyAllocation mode;
+    bool overrideCulling;
+    AnimatorCullingMode animatorCulling;
+    bool updateWhenOffscreen, skinnedMotionVectors;
+
+    public void ConfigureBenchmarkCulling(AnimatorCullingMode culling, bool offscreen, bool motionVectors)
+    {
+        if (pools != null) throw new InvalidOperationException("Configure culling before initializing the spawner.");
+        if (!Enum.IsDefined(typeof(AnimatorCullingMode), culling)) throw new ArgumentException("Invalid animator culling mode.");
+        overrideCulling = true;
+        animatorCulling = culling;
+        updateWhenOffscreen = offscreen;
+        skinnedMotionVectors = motionVectors;
+    }
 
     public void Initialize(EnemyAllocation requested)
     {
@@ -47,18 +60,33 @@ public class EnemySpawner : MonoBehaviour
 
     Entry Create(int type, Vector3 position, Quaternion rotation)
     {
-        GameObject obj = Instantiate(factory.enemyPrefab[type], position, rotation, transform);
-        var entry = new Entry { health = obj.GetComponent<EnemyHealth>(), attack = obj.GetComponent<EnemyAttack>(),
-            body = obj.GetComponent<Rigidbody>(), agent = obj.GetComponent<NavMeshAgent>(), type = type };
-        if (entry.health == null || entry.attack == null || entry.body == null || entry.agent == null)
+        using (new EnemyProfilerSample("Enemy.Spawner.Create"))
         {
-            Destroy(obj);
-            throw new InvalidOperationException("Enemy prefab is missing required components.");
+            GameObject obj = Instantiate(factory.enemyPrefab[type], position, rotation, transform);
+            // Configure instances once, including prewarmed and subsequently created enemies.
+            if (overrideCulling)
+            {
+                foreach (Animator animator in obj.GetComponentsInChildren<Animator>(true))
+                    animator.cullingMode = animatorCulling;
+                foreach (SkinnedMeshRenderer renderer in obj.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+                {
+                    renderer.updateWhenOffscreen = updateWhenOffscreen;
+                    renderer.skinnedMotionVectors = skinnedMotionVectors;
+                }
+            }
+            var entry = new Entry { health = obj.GetComponent<EnemyHealth>(), attack = obj.GetComponent<EnemyAttack>(),
+                body = obj.GetComponent<Rigidbody>(), agent = obj.GetComponent<NavMeshAgent>(), type = type };
+            if (entry.health == null || entry.attack == null || entry.body == null || entry.agent == null)
+            {
+                Destroy(obj);
+                throw new InvalidOperationException("Enemy prefab is missing required components.");
+            }
+            entry.kinematic = entry.body.isKinematic;
+            entries.Add(entry.health, entry);
+            using (new EnemyProfilerSample("Enemy.Object.Deactivate"))
+                obj.SetActive(false);
+            return entry;
         }
-        entry.kinematic = entry.body.isKinematic;
-        entries.Add(entry.health, entry);
-        obj.SetActive(false);
-        return entry;
     }
 
     public void Prewarm(int type, int count, Vector3 position, Quaternion rotation)
@@ -71,50 +99,67 @@ public class EnemySpawner : MonoBehaviour
 
     public EnemyHealth Spawn(int type, Vector3 position, Quaternion rotation, bool benchmark = false, Action onDied = null)
     {
-        if (pools == null) Initialize(allocation);
-        if (type < 0 || type >= pools.Length) throw new ArgumentOutOfRangeException("type");
-        Entry entry;
-        if (mode == EnemyAllocation.Pool && pools[type].Count > 0) entry = pools[type].Pop();
-        else
+        using (new EnemyProfilerSample("Enemy.Spawner.Spawn"))
         {
-            if (mode == EnemyAllocation.Pool) PoolExpansions++;
-            entry = Create(type, position, rotation);
+            if (pools == null) Initialize(allocation);
+            if (type < 0 || type >= pools.Length) throw new ArgumentOutOfRangeException("type");
+            Entry entry;
+            if (mode == EnemyAllocation.Pool && pools[type].Count > 0) entry = pools[type].Pop();
+            else
+            {
+                if (mode == EnemyAllocation.Pool) PoolExpansions++;
+                entry = Create(type, position, rotation);
+            }
+            entry.active = true;
+            try
+            {
+                using (new EnemyProfilerSample("Enemy.Navigation.Disable"))
+                    entry.agent.enabled = false;
+                using (new EnemyProfilerSample("Enemy.Physics.ResetBody"))
+                {
+                    entry.health.transform.SetPositionAndRotation(position, rotation);
+                    entry.body.isKinematic = entry.kinematic;
+                    entry.body.velocity = Vector3.zero;
+                    entry.body.angularVelocity = Vector3.zero;
+                }
+                using (new EnemyProfilerSample("Enemy.Object.Activate"))
+                    entry.health.gameObject.SetActive(true);
+                entry.health.ResetForSpawn(benchmark, this, onDied);
+                entry.attack.ResetForSpawn();
+                using (new EnemyProfilerSample("Enemy.Navigation.ActivateAndWarp"))
+                {
+                    entry.agent.enabled = true;
+                    if (!entry.agent.Warp(position) || !entry.agent.isOnNavMesh)
+                        throw new InvalidOperationException("Enemy spawn point is not on NavMesh.");
+                    entry.agent.ResetPath();
+                    entry.agent.isStopped = false;
+                }
+                return entry.health;
+            }
+            catch { Despawn(entry.health); throw; }
         }
-        entry.active = true;
-        try
-        {
-            entry.agent.enabled = false;
-            entry.health.transform.SetPositionAndRotation(position, rotation);
-            entry.body.isKinematic = entry.kinematic;
-            entry.body.velocity = Vector3.zero;
-            entry.body.angularVelocity = Vector3.zero;
-            entry.health.gameObject.SetActive(true);
-            entry.health.ResetForSpawn(benchmark, this, onDied);
-            entry.attack.ResetForSpawn();
-            entry.agent.enabled = true;
-            if (!entry.agent.Warp(position) || !entry.agent.isOnNavMesh)
-                throw new InvalidOperationException("Enemy spawn point is not on NavMesh.");
-            entry.agent.ResetPath();
-            entry.agent.isStopped = false;
-            return entry.health;
-        }
-        catch { Despawn(entry.health); throw; }
     }
 
     public void Despawn(EnemyHealth health)
     {
-        Entry entry;
-        if (health == null || !entries.TryGetValue(health, out entry) || !entry.active) return;
-        entry.active = false;
-        health.CancelInvoke();
-        health.SetDeathAction(null);
-        if (entry.agent.enabled && entry.agent.isOnNavMesh) entry.agent.ResetPath();
-        health.gameObject.SetActive(false);
-        if (mode == EnemyAllocation.Pool) pools[entry.type].Push(entry);
-        else
+        using (new EnemyProfilerSample("Enemy.Spawner.Despawn"))
         {
-            entries.Remove(health);
-            Destroy(health.gameObject);
+            Entry entry;
+            if (health == null || !entries.TryGetValue(health, out entry) || !entry.active) return;
+            entry.active = false;
+            health.CancelInvoke();
+            health.SetDeathAction(null);
+            using (new EnemyProfilerSample("Enemy.Navigation.ResetPath"))
+                if (entry.agent.enabled && entry.agent.isOnNavMesh) entry.agent.ResetPath();
+            using (new EnemyProfilerSample("Enemy.Object.Deactivate"))
+                health.gameObject.SetActive(false);
+            if (mode == EnemyAllocation.Pool) pools[entry.type].Push(entry);
+            else
+            {
+                entries.Remove(health);
+                using (new EnemyProfilerSample("Enemy.Spawner.DestroyRequest"))
+                    Destroy(health.gameObject);
+            }
         }
     }
 
@@ -124,5 +169,6 @@ public class EnemySpawner : MonoBehaviour
             if (pair.Key != null) { pair.Key.gameObject.SetActive(false); Destroy(pair.Key.gameObject); }
         entries.Clear();
         pools = null;
+        overrideCulling = false;
     }
 }

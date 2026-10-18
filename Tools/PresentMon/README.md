@@ -93,11 +93,15 @@ capture exit invalidate a measured run. Do not pause or change timeScale during 
 Output: Application.persistentDataPath/Benchmarks/<UTC-time>-<unique-id>/
 - raw.csv: complete unfiltered PresentMon output.
 - session.json: QPC start/end/frequency, process/session IDs, scenario, allocation,
+  active scene name (`scene`, for example Level_01 or Level_01_VisualExperiment),
   configuration, duration, tool hash/version and final result. Includes
   `periodicPathUpdates` (boolean) and `pathUpdateIntervalSeconds` (configured
   interval in seconds, also recorded when disabled), sampled from spawned enemies
   before capture. Do not change AI settings during a measured run. Missing fields
   in older reports mean unknown settings.
+  Reports created before scene recording was added have no `scene` field; the
+  replay file's scene is not a reliable substitute because both variants accept
+  the same replay.
 - capture.log: PresentMon diagnostics, including permissions errors.
 - measured.csv: only successful runs, filtered CPU frame intervals.
 - invalid-partial.csv: partial filter output if filtering failed; NOT usable results.

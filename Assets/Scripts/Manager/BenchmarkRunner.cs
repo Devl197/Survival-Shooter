@@ -325,6 +325,7 @@ BenchmarkSchedule schedule;
         try
         {
             capture = new PresentMonCapture();
+            capture.Run.scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
             RecordPathUpdateSettings(capture.Run);
             capture.Run.enemyCullingOverridden = overrideEnemyCulling;
             capture.Run.animatorCullingMode = overrideEnemyCulling ? animatorCulling.ToString() : "Prefab settings";

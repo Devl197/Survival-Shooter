@@ -110,6 +110,12 @@ BenchmarkSchedule schedule;
             ownsFrameSettings = true;
             QualitySettings.vSyncCount = 0;
             Application.targetFrameRate = -1;
+            Debug.Log("Benchmark frame settings: scene=" + UnityEngine.SceneManagement.SceneManager.GetActiveScene().name +
+                ", quality=" + QualitySettings.names[QualitySettings.GetQualityLevel()] +
+                ", vSyncCount=" + QualitySettings.vSyncCount +
+                ", targetFrameRate=" + Application.targetFrameRate +
+                ", editor=" + Application.isEditor +
+                ". Frame limits are restored when the benchmark ends.", this);
             if (scenario == null || spawner == null || factory == null || replay == null || !replay.isActiveAndEnabled ||
                 replay.startupMode == ReplayStartupMode.Normal || factory.enemyPrefab == null ||
                 factory.spawnPoints == null || scenario.typeWeights == null ||

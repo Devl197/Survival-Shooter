@@ -1,5 +1,43 @@
 # Benchmark neprijatelja
 
+## Vizuelni eksperimenti
+
+Benchmark meni ima izbor originalne scene Level_01 i kopije
+Level_01_VisualExperiment. Izbor se pamti i prikazuje u LAST LAUNCHED BENCHMARK.
+Normalna igra i dalje otvara original. Obe scene su u Build Settings i prihvataju
+isti replay; kompatibilnost je ogranicena na ovaj par scena.
+
+Eksperimentalna scena je vracena na identican sadrzaj originalne scene kao
+pocetna osnova za vizuelna poredjenja (zadrzava svoj zaseban GUID), uz jednu
+razliku: Auto Generate je iskljucen nakon potvrdene out-of-memory greske
+Progressive Lightmappera u Editor.log. Baked GI je ukljucen, Realtime GI
+iskljucen. Scene Lighting ostaje Realtime,
+a Reflection Probe Baked. Originalna Lighting Data Asset referenca trenutno
+nema odgovarajuci asset u Assets. Kopiranje reference ne oporavlja podatke iz
+Editor kesha, pa jednak izgled jos nije potvrdjen. Nije pokrenut Unity bake.
+
+Pre A/B testa u Editoru proveri originalni Lighting Data Asset i sacuvaj njegove
+podatke. Ako kopija i dalje izgleda drugacije, otvori samo originalnu scenu,
+proveri njen izgled i koristi Save As na Level_01_VisualExperiment da preneses
+trenutno Editor stanje u kopiju. Ako ni to ne prenese lighting podatke, potreban
+je nov Generate Lighting i vizuelna provera obe scene pod istim podesavanjima.
+Nemoj uklanjati podatke originala dok pocetni izgled nije sacuvan i proveren.
+
+BenchmarkRunner tokom testa postavlja vSyncCount=0 i targetFrameRate=-1, ispisuje
+efektivne vrednosti u Console/Player.log i vraca prethodne vrednosti na kraju.
+PresentMon session.json takodje belezi obe vrednosti. Ultra, podrazumevan za
+Standalone, ima VSync iskljucen; Medium i High ga imaju ukljucenog van benchmarka.
+Oko 60 FPS samo po sebi nije dokaz limita; meri aktivni test u Windows buildu.
+
+Kopija deli prefabove, materijale i NavMesh sa originalom. Vizuelne izmene pravi
+kao scene overrides bez Apply na zajednicke prefabove; za promene materijala
+prvo dupliciraj materijal. Ne menjaj geometriju, spawn tacke ili navigaciju ako
+zelis uporediv benchmark sa istim replay-em.
+
+U Editoru otvori kopiju, proveri Lighting Settings i izgled, pa u BenchmarkMenu
+izaberi scenu. Za Play Mode test iskljuci PresentMon capture; za merenje napravi
+nov Windows build. Uporedi isti scenario i replay, uz sva ostala podesavanja ista.
+
 ## Culling eksperimenti iz menija
 
 Meni pamti izbor scenarija, allocation, AI podesavanja, culling opcije, replay

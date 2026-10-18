@@ -44,7 +44,7 @@ RenderSettings:
 LightmapSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 11
-  m_GIWorkflowMode: 0
+  m_GIWorkflowMode: 1
   m_GISettings:
     serializedVersion: 2
     m_BounceScale: 1
@@ -88,7 +88,7 @@ LightmapSettings:
     m_PVRFilteringAtrousPositionSigmaIndirect: 2
     m_PVRFilteringAtrousPositionSigmaAO: 1
     m_ShowResolutionOverlay: 1
-  m_LightingDataAsset: {fileID: 112000000, guid: 37a9e98842ea36f4998fd3f67bcd9dd4,
+  m_LightingDataAsset: {fileID: 112000000, guid: e817e64820ce5a841b288069827efc51,
     type: 2}
   m_UseShadowmask: 1
 --- !u!196 &4
@@ -7498,6 +7498,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   runBenchmark: 1
   captureWithPresentMon: 0
+  overrideEnemyCulling: 0
+  animatorCulling: 1
+  updateWhenOffscreen: 0
+  skinnedMotionVectors: 1
   presentMonPath: E:\Master\Unity\Survival-Shooter\Tools\PresentMon\PresentMon-2.6.0-x64.exe
   captureReadyTimeout: 30
   stabilizationSeconds: 1

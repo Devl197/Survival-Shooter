@@ -50,3 +50,4 @@ MonoBehaviour:
   - {fileID: 11400000, guid: afabb46e8d104d81acf5b908782224f2, type: 2}
   - {fileID: 11400000, guid: 1fb930db630f489ab05b2f50a30714f4, type: 2}
   gameScene: Level_01
+  experimentalScene: Level_01_VisualExperiment

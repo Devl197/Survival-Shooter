@@ -28,6 +28,9 @@ public class BenchmarkMenu : MonoBehaviour
     string pathUpdateInterval = "0.2";
     public BenchmarkScenario[] scenarios;
     public string gameScene = "Level_01";
+    public string experimentalScene = "Level_01_VisualExperiment";
+    bool useExperimentalScene;
+    string SelectedScene { get { return useExperimentalScene ? experimentalScene : gameScene; } }
     string folder, replayPath = "", error = "";
     string presentMonPath = "Tools/PresentMon/PresentMon-2.6.0-x64.exe";
     string[] files = new string[0];
@@ -47,6 +50,7 @@ public class BenchmarkMenu : MonoBehaviour
     {
         public string scenario, folder, replayPath, presentMonPath, pathUpdateInterval;
         public int allocation, culling;
+        public string scene;
         public bool capture, periodicPathUpdates, updateWhenOffscreen, skinnedMotionVectors;
     }
 
@@ -58,6 +62,7 @@ public class BenchmarkMenu : MonoBehaviour
         {
             var saved = JsonUtility.FromJson<SavedSettings>(PlayerPrefs.GetString(PreferencesKey));
             if (saved == null) return;
+            useExperimentalScene = saved.scene == experimentalScene;
             if (scenarios != null)
             {
                 int index = Array.FindIndex(scenarios, s => s != null && s.name == saved.scenario);
@@ -80,6 +85,7 @@ public class BenchmarkMenu : MonoBehaviour
     void SaveSettings()
     {
         var saved = new SavedSettings {
+            scene = SelectedScene,
             scenario = scenarios != null && scenarioIndex >= 0 && scenarioIndex < scenarios.Length && scenarios[scenarioIndex] != null
                 ? scenarios[scenarioIndex].name : "",
             folder = folder, replayPath = replayPath, presentMonPath = presentMonPath,
@@ -94,7 +100,7 @@ public class BenchmarkMenu : MonoBehaviour
     string DescribeBenchmark(string path)
     {
         return DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) + " (local)\n" +
-            "Scene: " + gameScene + " | " + scenarios[scenarioIndex].name + " | " + (EnemyAllocation)allocationIndex + "\n" +
+            "Scene: " + SelectedScene + " | " + scenarios[scenarioIndex].name + " | " + (EnemyAllocation)allocationIndex + "\n" +
             "Animator: " + CullingNames[animatorCullingIndex] +
             " | Offscreen: " + (updateWhenOffscreen ? "On" : "Off") +
             " | Motion vectors: " + (skinnedMotionVectors ? "On" : "Off") + "\n" +
@@ -143,13 +149,14 @@ public class BenchmarkMenu : MonoBehaviour
     {
         try
         {
+            string scene = SelectedScene;
             if (scenarios == null || scenarioIndex >= scenarios.Length || scenarios[scenarioIndex] == null)
                 throw new InvalidOperationException("Select a benchmark scenario.");
             string path = Path.GetFullPath(replayPath.Trim());
             var session = JsonUtility.FromJson<ReplaySession>(File.ReadAllText(path));
-            SessionReplay.ValidateForScene(session, gameScene);
+            SessionReplay.ValidateForScene(session, scene);
             if (session.duration <= 0) throw new InvalidDataException("Replay duration must be positive.");
-            if (!Application.CanStreamedLevelBeLoaded(gameScene))
+            if (!Application.CanStreamedLevelBeLoaded(scene))
                 throw new InvalidOperationException("The gameplay scene is missing from Build Settings.");
             if (capture)
             {
@@ -163,7 +170,7 @@ public class BenchmarkMenu : MonoBehaviour
             BenchmarkLaunch.NormalGame = false;
             BenchmarkLaunch.Allocation = (EnemyAllocation)allocationIndex;
             BenchmarkLaunch.ReplayPath = path;
-            BenchmarkLaunch.Scene = gameScene;
+            BenchmarkLaunch.Scene = scene;
             BenchmarkLaunch.Capture = capture;
             BenchmarkLaunch.PresentMonPath = presentMonPath;
             BenchmarkLaunch.AnimatorCulling = CullingModes[animatorCullingIndex];
@@ -173,7 +180,7 @@ public class BenchmarkMenu : MonoBehaviour
             SaveSettings();
             string description = DescribeBenchmark(path);
             loading = true;
-            SceneManager.LoadScene(gameScene);
+            SceneManager.LoadScene(scene);
             lastBenchmark = description;
             PlayerPrefs.SetString(PreferencesKey + ".LastBenchmark", lastBenchmark);
             PlayerPrefs.Save();
@@ -244,6 +251,10 @@ public class BenchmarkMenu : MonoBehaviour
         GUILayout.Label("Normal gameplay uses waves and power-ups. No replay or PresentMon is required.");
         GUILayout.Space(14);
         GUILayout.Label("BENCHMARK", new GUIStyle(GUI.skin.label) { fontSize = 20 });
+        GUILayout.Label("Scene (benchmark only)");
+        useExperimentalScene = GUILayout.SelectionGrid(useExperimentalScene ? 1 : 0,
+            new[] { gameScene + " (original)", experimentalScene + " (visual experiments)" },
+            2, GUILayout.Height(34)) == 1;
         GUILayout.Label("Choose settings, then start one measured playback. Restart the application for the next run.");
         if (!string.IsNullOrEmpty(lastBenchmark))
         {

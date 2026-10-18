@@ -322,7 +322,7 @@ public class SessionReplay : MonoBehaviour
 
     public static void ValidateForScene(ReplaySession data, string sceneName)
     {
-        if (data == null || !data.powerUpsDisabled || data.scene != sceneName ||
+        if (data == null || !data.powerUpsDisabled || !CompatibleReplayScene(data.scene, sceneName) ||
             !Finite(data.duration) || data.duration < 0f || data.frames == null || data.frames.Count == 0 || data.shots == null)
             throw new InvalidDataException("Invalid replay data: check scene, duration, frames and disabled power-ups.");
         float previous = -1f;
@@ -342,6 +342,15 @@ public class SessionReplay : MonoBehaviour
                 throw new InvalidDataException("Invalid replay shot.");
             previous = shot.time;
         }
+    }
+
+    // These scenes share gameplay geometry. Keep this allowlist narrow: unrelated
+    // scenes must not accept recordings with different spawn points or navigation.
+    static bool CompatibleReplayScene(string recorded, string current)
+    {
+        if (recorded == current) return true;
+        return (recorded == "Level_01" && current == "Level_01_VisualExperiment") ||
+            (recorded == "Level_01_VisualExperiment" && current == "Level_01");
     }
 
     void OnDisable() { Stop(); }

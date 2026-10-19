@@ -71,3 +71,20 @@ crashlytics-build.properties
 
 # Local PresentMon executable; keep integration, tests and documentation tracked.
 /Tools/PresentMon/*.exe
+
+# Benchmark reports, captures and local analysis output (not the clean template).
+/outputs/
+/Benchmarks/
+/Profiler/
+/Tools/BenchmarkAnalysis/results/
+/Tools/BenchmarkAnalysis/reports/
+/Tools/BenchmarkAnalysis/exports/
+/Tools/BenchmarkAnalysis/Slike_za_Word/
+/Tools/BenchmarkAnalysis/tmp/
+/Tools/BenchmarkAnalysis/*.xlsm
+/Tools/BenchmarkAnalysis/~$*
+
+# Local dependencies and Python caches.
+node_modules/
+__pycache__/
+*.pyc

@@ -9,12 +9,12 @@ public static class BenchmarkLaunch
 {
     public static BenchmarkScenario Scenario;
     public static EnemyAllocation Allocation;
-    public static string ReplayPath, Scene, PresentMonPath;
+    public static string ReplayPath, Scene, PresentMonPath, ResultsDirectory;
     public static bool Capture, NormalGame;
     public static AnimatorCullingMode AnimatorCulling;
     public static bool UpdateWhenOffscreen, SkinnedMotionVectors;
     public static bool Applies { get { return !string.IsNullOrEmpty(Scene) && SceneManager.GetActiveScene().name == Scene; } }
-    public static void Clear() { Scenario = null; ReplayPath = Scene = PresentMonPath = null; Capture = NormalGame = false;
+    public static void Clear() { Scenario = null; ReplayPath = Scene = PresentMonPath = ResultsDirectory = null; Capture = NormalGame = false;
         AnimatorCulling = AnimatorCullingMode.CullUpdateTransforms; UpdateWhenOffscreen = false; SkinnedMotionVectors = true; }
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
@@ -32,6 +32,8 @@ public class BenchmarkMenu : MonoBehaviour
     bool useExperimentalScene;
     string SelectedScene { get { return useExperimentalScene ? experimentalScene : gameScene; } }
     string folder, replayPath = "", error = "";
+    string resultsFolder = "";
+    static string ResultsRoot { get { return Path.Combine(Application.persistentDataPath, "Benchmarks"); } }
     string presentMonPath = "Tools/PresentMon/PresentMon-2.6.0-x64.exe";
     string[] files = new string[0];
     int scenarioIndex, allocationIndex;
@@ -48,7 +50,7 @@ public class BenchmarkMenu : MonoBehaviour
     [Serializable]
     sealed class SavedSettings
     {
-        public string scenario, folder, replayPath, presentMonPath, pathUpdateInterval;
+        public string scenario, folder, replayPath, presentMonPath, pathUpdateInterval, resultsFolder;
         public int allocation, culling;
         public string scene;
         public bool capture, periodicPathUpdates, updateWhenOffscreen, skinnedMotionVectors;
@@ -71,6 +73,7 @@ public class BenchmarkMenu : MonoBehaviour
             allocationIndex = Mathf.Clamp(saved.allocation, 0, 1);
             animatorCullingIndex = Mathf.Clamp(saved.culling, 0, CullingModes.Length - 1);
             folder = saved.folder ?? folder;
+            resultsFolder = saved.resultsFolder ?? "";
             replayPath = saved.replayPath ?? replayPath;
             presentMonPath = saved.presentMonPath ?? presentMonPath;
             pathUpdateInterval = saved.pathUpdateInterval ?? pathUpdateInterval;
@@ -88,7 +91,7 @@ public class BenchmarkMenu : MonoBehaviour
             scene = SelectedScene,
             scenario = scenarios != null && scenarioIndex >= 0 && scenarioIndex < scenarios.Length && scenarios[scenarioIndex] != null
                 ? scenarios[scenarioIndex].name : "",
-            folder = folder, replayPath = replayPath, presentMonPath = presentMonPath,
+            folder = folder, replayPath = replayPath, presentMonPath = presentMonPath, resultsFolder = resultsFolder,
             pathUpdateInterval = pathUpdateInterval, allocation = allocationIndex, culling = animatorCullingIndex,
             capture = capture, periodicPathUpdates = periodicPathUpdates,
             updateWhenOffscreen = updateWhenOffscreen, skinnedMotionVectors = skinnedMotionVectors
@@ -106,7 +109,7 @@ public class BenchmarkMenu : MonoBehaviour
             " | Motion vectors: " + (skinnedMotionVectors ? "On" : "Off") + "\n" +
             "Periodic AI: " + (periodicPathUpdates ? "On" : "Off") + " | Interval: " + pathUpdateInterval + " s\n" +
             "PresentMon: " + (capture ? "On" : "Off") + " | Executable: " + presentMonPath + "\n" +
-            "Replay: " + path;
+            "Replay: " + path + "\nResults: " + GetResultsDirectory();
     }
 
     void OnDisable() { SaveSettings(); }
@@ -166,6 +169,9 @@ public class BenchmarkMenu : MonoBehaviour
                     Path.Combine(Path.GetDirectoryName(Application.dataPath), presentMonPath);
                 if (!File.Exists(exe)) throw new FileNotFoundException("PresentMon executable not found. Enter its full path.");
             }
+            string resultsDirectory = GetResultsDirectory();
+            Directory.CreateDirectory(resultsDirectory);
+            BenchmarkLaunch.ResultsDirectory = resultsDirectory;
             BenchmarkLaunch.Scenario = scenarios[scenarioIndex];
             BenchmarkLaunch.NormalGame = false;
             BenchmarkLaunch.Allocation = (EnemyAllocation)allocationIndex;
@@ -202,6 +208,21 @@ public class BenchmarkMenu : MonoBehaviour
             SceneManager.LoadScene(gameScene);
         }
         catch (Exception e) { BenchmarkLaunch.Clear(); loading = false; error = e.Message; }
+    }
+
+    string GetResultsDirectory()
+    {
+        string name = resultsFolder.Trim();
+        if (name.Length == 0) return ResultsRoot;
+        if (name == "." || name == ".." || name.EndsWith(".", StringComparison.Ordinal) ||
+            name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || name.IndexOfAny("<>:\"/\\|?*".ToCharArray()) >= 0)
+            throw new InvalidOperationException("Enter a single results subfolder name, without path separators or invalid characters.");
+        string stem = name.Split('.')[0].TrimEnd().ToUpperInvariant();
+        if (stem == "CON" || stem == "PRN" || stem == "AUX" || stem == "NUL" ||
+            (stem.Length == 4 && (stem.StartsWith("COM", StringComparison.Ordinal) || stem.StartsWith("LPT", StringComparison.Ordinal)) &&
+            "123456789\u00b9\u00b2\u00b3".IndexOf(stem[3]) >= 0))
+            throw new InvalidOperationException("This results subfolder name is reserved by Windows. Choose another name.");
+        return Path.Combine(ResultsRoot, name);
     }
 
     void ApplyPathUpdateSettings()
@@ -295,6 +316,20 @@ public class BenchmarkMenu : MonoBehaviour
         replayPath = GUILayout.TextField(replayPath);
         GUILayout.Label("Duration comes from the replay. The selected file is only read, never overwritten.");
         GUILayout.Space(10);
+        GUILayout.Label("Results subfolder (category; optional)");
+        resultsFolder = GUILayout.TextField(resultsFolder);
+        bool validResultsFolder = true;
+        try
+        {
+            GUILayout.Label("Save to: " + GetResultsDirectory(), new GUIStyle(GUI.skin.label) { wordWrap = true });
+        }
+        catch (Exception e)
+        {
+            validResultsFolder = false;
+            GUILayout.Label(e.Message, new GUIStyle(GUI.skin.label) { wordWrap = true, normal = { textColor = new Color(1, .65f, .45f) } });
+        }
+        GUILayout.Label("Created automatically when starting. Leave empty to use Benchmarks. Each capture keeps its own run folder.");
+        GUILayout.Space(10);
         capture = GUILayout.Toggle(capture, "Capture with PresentMon (Windows build)");
         if (capture)
         {
@@ -303,7 +338,7 @@ public class BenchmarkMenu : MonoBehaviour
         }
         GUILayout.Space(12);
         if (!string.IsNullOrEmpty(error)) GUILayout.Label(error, new GUIStyle(GUI.skin.label) { wordWrap = true, normal = { textColor = new Color(1, .65f, .45f) } });
-        GUI.enabled = !loading && validInterval;
+        GUI.enabled = !loading && validInterval && validResultsFolder;
         if (GUILayout.Button(loading ? "Loading..." : "Start benchmark", GUILayout.Height(44))) Launch();
         GUI.enabled = true;
         if (GUILayout.Button("Quit", GUILayout.Height(30))) Application.Quit();

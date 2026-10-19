@@ -22,6 +22,7 @@ public class BenchmarkRunner : MonoBehaviour
     public float stabilizationSeconds = 1f;
     public float captureTailSeconds = 2f;
     PresentMonCapture capture;
+    string resultsDirectory;
     BenchmarkProfilerCapture profilerCapture;
     bool preparingCapture;
     bool finalizingCapture;
@@ -74,6 +75,7 @@ BenchmarkSchedule schedule;
                 scenario = BenchmarkLaunch.Scenario;
                 allocation = BenchmarkLaunch.Allocation;
                 presentMonPath = BenchmarkLaunch.PresentMonPath;
+                resultsDirectory = BenchmarkLaunch.ResultsDirectory;
                 overrideEnemyCulling = true;
                 animatorCulling = BenchmarkLaunch.AnimatorCulling;
                 updateWhenOffscreen = BenchmarkLaunch.UpdateWhenOffscreen;
@@ -342,7 +344,8 @@ BenchmarkSchedule schedule;
             capture.Run.targetFrameRate = Application.targetFrameRate;
             string root = Path.GetDirectoryName(Application.dataPath);
             string executable = Path.IsPathRooted(presentMonPath) ? presentMonPath : Path.Combine(root, presentMonPath);
-            capture.Start(executable, Path.Combine(Application.persistentDataPath, "Benchmarks"));
+            capture.Start(executable, string.IsNullOrEmpty(resultsDirectory)
+                ? Path.Combine(Application.persistentDataPath, "Benchmarks") : resultsDirectory);
             started = true;
         }
         catch (Exception e)

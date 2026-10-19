@@ -28,7 +28,11 @@ or enter an absolute executable path in the menu. Disable capture to exercise th
 menu in the Unity Editor. Click Start benchmark to load gameplay; menu/scene loading
 and pool preparation remain outside the measured interval. Restart the application
 for each comparison run and choose the same scenario/replay with the other allocation.
-Results still go to Application.persistentDataPath/Benchmarks in unique folders.
+Results go to Application.persistentDataPath/Benchmarks in unique run folders.
+Set Results subfolder in the menu to group captures under a category, for example
+Benchmarks/AI-tests/<unique-run>. The category is created automatically at launch,
+and the menu remembers it. Leave it empty to save directly under Benchmarks.
+Enter a single folder name; paths and reserved Windows names are rejected.
 There is no automatic repeat or return to menu after completion. Esc exits the build.
 
 Opening Level_01 directly in the Editor still uses its Inspector settings, including

@@ -28,11 +28,14 @@ $first = @(Get-ChildItem $settings.resultsRoot -Directory)[0]
 $summary = @(Get-Content (Join-Path $first.FullName '_automation/summary.json') -Raw | ConvertFrom-Json)
 Check ($summary.Count -eq 8) 'Wrong number of tests.'
 Check (@($summary | Where-Object result -ne 'Completed').Count -eq 0) 'Success test failed.'
+Check (@($summary | Where-Object { $_.screenWidth -ne 1920 -or $_.screenHeight -ne 1080 -or $_.fullscreen -or $_.qualityLevel -ne 'Ultra' }).Count -eq 0) 'Graphics settings missing from summary.'
 Check (($summary.repetition -join ',') -eq '1,1,1,1,2,2,2,2') 'Repetitions do not run across all groups.'
 Check (($summary.group -join ',') -eq 'Original-periodic,Original-periodic,Visual-periodic,Visual-periodic,Original-periodic,Original-periodic,Visual-periodic,Visual-periodic') 'Groups do not run in configuration order within each round.'
 Check (($summary.allocation -join ',') -eq 'InstantiateDestroy,Pool,InstantiateDestroy,Pool,Pool,InstantiateDestroy,Pool,InstantiateDestroy') 'Allocations do not alternate within each group.'
 Check (@(Get-ChildItem $first.FullName -Directory).Count -eq 3) 'Expected two group folders and _automation.'
 $settings.repetitions = 3
+$settings.graphics.quality = 'Very High'
+$settings.graphics.fullscreen = $true
 $settings.groups[0].allocations = @('InstantiateDestroy')
 $settings.groups[1].allocations = @('Pool')
 Save-Config
@@ -45,7 +48,7 @@ Check (($rounds.repetition -join ',') -eq '1,1,2,2,3,3') 'Incorrect repetition n
 $settings.repetitions = 1
 $settings.groups = @($settings.groups[0])
 $settings.groups[0].allocations = @('InstantiateDestroy','Pool')
-foreach ($mode in @('failed','missing','timeout','bad-count','bad-settings','bad-frame')) {
+foreach ($mode in @('failed','missing','timeout','bad-count','bad-settings','bad-frame','bad-resolution','bad-quality')) {
     Set-Mode $mode
     $settings.timeoutSeconds = 2
     $settings.continueOnFailure = $mode -ne 'failed'
@@ -61,6 +64,7 @@ foreach ($mode in @('failed','missing','timeout','bad-count','bad-settings','bad
     Check (@($rows | Where-Object result -ne 'Failed').Count -eq 0) "Failure '$mode' not recorded."
 }
 Set-Mode 'success'
+$validGroupName = $settings.groups[0].name
 foreach ($invalidName in @('../escape', '_automation', 'CON', 'trailing.')) {
     $settings.groups[0].name = $invalidName
     Save-Config
@@ -68,4 +72,16 @@ foreach ($invalidName in @('../escape', '_automation', 'CON', 'trailing.')) {
     try { & $runner -Config $configPath -ValidateOnly } catch { $caught = $true }
     Check $caught "Invalid group name '$invalidName' was accepted."
 }
-Write-Host 'PASS: planning, paths with spaces, isolation, alternating order, failures, timeout, CSV validation and stop/continue policies.'
+$settings.groups[0].name = $validGroupName
+$settings.graphics.width = 0
+Save-Config
+$caught = $false
+try { & $runner -Config $configPath -ValidateOnly } catch { $caught = $true }
+Check $caught 'Invalid graphics width was accepted.'
+$settings.graphics.width = 1920
+$settings.graphics.quality = 'Ultrra'
+Save-Config
+$caught = $false
+try { & $runner -Config $configPath -ValidateOnly } catch { $caught = $true }
+Check $caught 'Unknown graphics quality was accepted.'
+Write-Host 'PASS: planning, paths with spaces, isolation, round-robin groups, graphics arguments and metadata, failures, timeout, CSV validation and stop/continue policies.'

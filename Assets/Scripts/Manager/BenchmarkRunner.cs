@@ -201,6 +201,11 @@ BenchmarkSchedule schedule;
 
     void Update()
     {
+        if (running && !BenchmarkAutomation.GraphicsMatch())
+        {
+            Finish("Invalid: graphics settings changed");
+            return;
+        }
         if (running && capture != null && (Time.timeScale != 1f || !Application.isFocused || capture.Exited))
         {
 
@@ -344,6 +349,7 @@ BenchmarkSchedule schedule;
             capture.Run.duration = duration;
             capture.Run.vSyncCount = QualitySettings.vSyncCount;
             capture.Run.targetFrameRate = Application.targetFrameRate;
+            RecordGraphicsSettings(capture.Run);
             string root = Path.GetDirectoryName(Application.dataPath);
             string executable = Path.IsPathRooted(presentMonPath) ? presentMonPath : Path.Combine(root, presentMonPath);
             capture.Start(executable, string.IsNullOrEmpty(resultsDirectory)
@@ -375,10 +381,17 @@ BenchmarkSchedule schedule;
         yield return null;
         ready = ready && Time.timeScale == 0f && !capture.Exited;
         RestorePreparation();
+        if (ready && !BenchmarkAutomation.GraphicsMatch())
+        {
+            ready = false;
+            capture.Run.error = "Actual resolution/fullscreen/quality does not match the requested graphics settings.";
+        }
         if (!ready || !Application.isFocused)
         {
             status = "Failed";
-            Debug.LogError("PresentMon did not become ready. Check capture.log and ETW permissions.", this);
+            Debug.LogError("Benchmark capture could not start. " +
+                (capture != null && !string.IsNullOrEmpty(capture.Run.error) ? capture.Run.error :
+                "Check focus, capture.log and ETW permissions."), this);
             string failedDirectory = capture != null ? capture.DirectoryPath : null;
             string failure = "Readiness cancelled, timed out or lost focus.";
             if (capture != null)
@@ -393,6 +406,7 @@ BenchmarkSchedule schedule;
             yield break;
         }
         replay.Stopping += ReplayStopping;
+        RecordGraphicsSettings(capture.Run);
         if (!replay.BeginBenchmark()) { Finish("Failed"); yield break; }
         capture.MarkStart();
         status = "Running";
@@ -417,6 +431,14 @@ BenchmarkSchedule schedule;
             else if (run.periodicPathUpdates != periodic || run.pathUpdateIntervalSeconds != interval)
                 throw new InvalidOperationException("Benchmark enemies must share the same path update settings.");
         }
+    }
+
+    static void RecordGraphicsSettings(PresentMonRun run)
+    {
+        run.screenWidth = Screen.width;
+        run.screenHeight = Screen.height;
+        run.fullscreen = Screen.fullScreen;
+        run.qualityLevel = QualitySettings.names[QualitySettings.GetQualityLevel()];
     }
 
     void ReplayStopping()

@@ -26,6 +26,23 @@ Igra mora biti vidljiva i u fokusu tokom merenja. Ne koristi računar za druge p
 
 Sva polja iz primera su obavezna. Nepoznata polja se odbijaju da slovne greške ne bi tiho promenile eksperiment. Putanje mogu biti apsolutne ili relativne **u odnosu na konfiguracioni fajl**, uz Windows promenljive poput `%USERPROFILE%`. U JSON-u koristi `/` ili duplo `\\` za razdvajanje foldera.
 
+Grafička podešavanja su zajednička za **sve grupe i sva ponavljanja**. Dodaj ovaj objekat na glavni nivo postojećeg `series.local.json` (pored `repetitions` i `groups`):
+
+```json
+"graphics": {
+  "width": 1920,
+  "height": 1080,
+  "fullscreen": false,
+  "quality": "Ultra"
+}
+```
+
+`width` i `height` su željene dimenzije slike u pikselima; `fullscreen: false` pokreće igru u prozoru, a `true` preko celog ekrana. `quality` je tačan naziv profila: `Very Low`, `Low`, `Medium`, `High`, `Very High` ili `Ultra`. Primer 1920×1080, prozor i Ultra je početno podešavanje koje treba prilagoditi monitoru i eksperimentu. Za drugu rezoluciju ili kvalitet pokreni novu seriju sa izmenjenim objektom.
+
+Skripta prosleđuje vrednosti Unity player-u pre učitavanja scene, a igra dodatno bira zadati kvalitet pre pripreme benchmarka. Neposredno pre merenja proveravaju se stvarne dimenzije slike, fullscreen i kvalitet. Ako sistem ne može da primeni izabranu rezoluciju ili ih promeni tokom merenja, test se označava nevalidnim. U `session.json` se beleže `screenWidth`, `screenHeight`, `fullscreen` i `qualityLevel`; skripta ih proverava i prikazuje zadate vrednosti u `summary.csv`. `-ValidateOnly` prikazuje zajednička grafička podešavanja, ali bez pokretanja igre ne može potvrditi da monitor podržava traženi režim.
+
+Za ovu proveru i nove metapodatke potreban je **novi build igre**. Launcher i dalje mora biti isključen kroz `Display Resolution Dialog = Disabled`. Benchmark kao i ranije isključuje VSync i ograničenje FPS-a tokom merenja, bez obzira na kvalitet koji je odabran.
+
 | Polje serije | Značenje |
 | --- | --- |
 | `seriesName` | Prefiks novog foldera serije. Skripta dodaje UTC vreme i jedinstveni ID. |
@@ -38,6 +55,7 @@ Sva polja iz primera su obavezna. Nepoznata polja se odbijaju da slovne greške 
 | `timeoutSeconds` | Ukupno ograničenje po procesu: učitavanje, priprema, replay i finalizacija. Postavi iznad trajanja replay-a sa dovoljnom rezervom. |
 | `continueOnFailure` | `true`: zabeleži grešku i pređi na sledeći test; `false`: prekini seriju posle prve greške. |
 | `groups` | Redom navedene grupe eksperimenata. |
+| `graphics` | Zajednička rezolucija, fullscreen i naziv kvaliteta; važe za svako merenje. |
 
 | Polje grupe | Značenje |
 | --- | --- |

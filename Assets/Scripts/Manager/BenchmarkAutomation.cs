@@ -6,6 +6,14 @@ using UnityEngine;
 public static class BenchmarkAutomation
 {
     [Serializable]
+    public sealed class GraphicsSettings
+    {
+        public int width, height;
+        public bool fullscreen;
+        public string quality;
+    }
+
+    [Serializable]
     public sealed class Request
     {
         public string scene, scenario, allocation, replayPath, presentMonPath, resultsDirectory, reportPath;
@@ -13,6 +21,7 @@ public static class BenchmarkAutomation
         public bool periodicPathUpdates, updateWhenOffscreen;
         public bool skinnedMotionVectors = true;
         public float pathUpdateIntervalSeconds = 0.2f;
+        public GraphicsSettings graphics;
     }
 
     [Serializable]
@@ -39,6 +48,28 @@ public static class BenchmarkAutomation
             throw new InvalidDataException("Request must specify an absolute reportPath.");
         value = request;
         return true;
+    }
+
+    public static void ApplyGraphics()
+    {
+        // Resolution/fullscreen are passed to the native player before scene startup.
+        // Old request files without graphics keep their existing behavior.
+        if (!Active || request.graphics == null) return;
+        var graphics = request.graphics;
+        if (graphics.width < 320 || graphics.width > 16384 || graphics.height < 200 || graphics.height > 16384)
+            throw new InvalidDataException("Invalid requested resolution.");
+        int quality = Array.IndexOf(QualitySettings.names, graphics.quality);
+        if (quality < 0) throw new InvalidDataException("Unknown quality level: " + graphics.quality);
+        QualitySettings.SetQualityLevel(quality, true);
+    }
+
+    public static bool GraphicsMatch()
+    {
+        if (!Active || request.graphics == null) return true;
+        var graphics = request.graphics;
+        return Screen.width == graphics.width && Screen.height == graphics.height &&
+            Screen.fullScreen == graphics.fullscreen &&
+            QualitySettings.names[QualitySettings.GetQualityLevel()] == graphics.quality;
     }
 
     public static void Complete(string result, string error, string captureDirectory)

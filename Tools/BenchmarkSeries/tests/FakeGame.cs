@@ -12,6 +12,15 @@ class FakeGame
         var json = new JavaScriptSerializer();
         int index = Array.IndexOf(args, "--benchmark-request");
         var request = json.Deserialize<Dictionary<string, object>>(File.ReadAllText(args[index + 1]));
+        var graphics = (Dictionary<string, object>)request["graphics"];
+        foreach (string option in new[] { "-screen-width", "-screen-height", "-screen-fullscreen", "-screen-quality" })
+        {
+            int argument = Array.IndexOf(args, option);
+            string key = option == "-screen-width" ? "width" : option == "-screen-height" ? "height" : option == "-screen-quality" ? "quality" : "fullscreen";
+            string expected = key == "fullscreen" ? ((bool)graphics[key] ? "1" : "0") : Convert.ToString(graphics[key]);
+            if (argument < 0 || argument + 1 >= args.Length || args[argument + 1] != expected)
+                throw new Exception("Missing or incorrect graphics argument: " + option);
+        }
         string replay = (string)request["replayPath"];
         string mode = (string)json.Deserialize<Dictionary<string, object>>(File.ReadAllText(replay))["testMode"];
         if (mode == "timeout") { Thread.Sleep(10000); return 1; }
@@ -23,6 +32,9 @@ class FakeGame
             result = "Completed", filteredFrames = mode == "bad-count" ? 3 : 2,
             scene = request["scene"], scenario = request["scenario"], allocation = request["allocation"],
             processId = System.Diagnostics.Process.GetCurrentProcess().Id, replayFile = replay,
+            screenWidth = Convert.ToInt32(graphics["width"]) + (mode == "bad-resolution" ? 1 : 0),
+            screenHeight = graphics["height"], fullscreen = graphics["fullscreen"],
+            qualityLevel = mode == "bad-quality" ? "Unexpected" : graphics["quality"],
             enemyCullingOverridden = true, animatorCullingMode = request["animatorCulling"],
             periodicPathUpdates = mode == "bad-settings" ? !(bool)request["periodicPathUpdates"] : (bool)request["periodicPathUpdates"],
             pathUpdateIntervalSeconds = request["pathUpdateIntervalSeconds"],

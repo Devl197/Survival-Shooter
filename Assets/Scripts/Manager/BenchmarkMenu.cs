@@ -129,6 +129,7 @@ public class BenchmarkMenu : MonoBehaviour
             if (BenchmarkAutomation.TryRead(out request))
             {
                 ApplyAutomation(request);
+                BenchmarkAutomation.ApplyGraphics();
                 Launch();
                 return;
             }

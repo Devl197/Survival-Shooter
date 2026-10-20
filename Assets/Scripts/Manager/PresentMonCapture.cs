@@ -23,6 +23,9 @@ public class PresentMonRun
     public float pathUpdateIntervalSeconds;
     public int processId, seed, enemyCount;
     public int vSyncCount, targetFrameRate;
+    public int screenWidth, screenHeight;
+    public bool fullscreen;
+    public string qualityLevel;
     public float duration;
     public long frequency, startQpc, endQpc;
     public int filteredFrames;

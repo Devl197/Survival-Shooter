@@ -45,12 +45,19 @@ $configPath = (Resolve-Path -LiteralPath $Config).Path
 $configDirectory = Split-Path -Parent $configPath
 $settings = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
 Assert-Properties $settings @('seriesName','gameExecutable','presentMonPath','replayPath','resultsRoot',
-    'repetitions','pauseSeconds','timeoutSeconds','continueOnFailure','groups') 'series'
+    'repetitions','pauseSeconds','timeoutSeconds','continueOnFailure','graphics','groups') 'series'
 Assert-Name $settings.seriesName
 Assert-Number $settings.repetitions 1 10000 $true 'repetitions'
 Assert-Number $settings.pauseSeconds 0 3600 $false 'pauseSeconds'
 Assert-Number $settings.timeoutSeconds 1 86400 $true 'timeoutSeconds'
 if ($settings.continueOnFailure -isnot [bool]) { throw 'continueOnFailure must be a JSON boolean.' }
+Assert-Properties $settings.graphics @('width','height','fullscreen','quality') 'graphics'
+Assert-Number $settings.graphics.width 320 16384 $true 'graphics.width'
+Assert-Number $settings.graphics.height 200 16384 $true 'graphics.height'
+if ($settings.graphics.fullscreen -isnot [bool]) { throw 'graphics.fullscreen must be a JSON boolean.' }
+if ($settings.graphics.quality -cnotin @('Very Low','Low','Medium','High','Very High','Ultra')) {
+    throw 'Unknown graphics.quality. Use a quality name defined in this project.'
+}
 $game = Resolve-ConfigPath $settings.gameExecutable
 $presentMon = Resolve-ConfigPath $settings.presentMonPath
 $replay = Resolve-ConfigPath $settings.replayPath
@@ -102,6 +109,8 @@ for ($repeat = 0; $repeat -lt $settings.repetitions; $repeat++) {
 }
 $plan | Select-Object @{n='Group';e={$_.group.name}}, repetition, allocation | Format-Table | Out-Host
 Write-Host ("Planned runs: {0}; results root: {1}" -f $plan.Count, $resultsRoot)
+Write-Host ('Graphics for every run: {0}x{1}; fullscreen={2}; quality={3}' -f $settings.graphics.width,
+    $settings.graphics.height, $settings.graphics.fullscreen, $settings.graphics.quality)
 if ($ValidateOnly) { return }
 
 $seriesId = '{0}-{1}-{2}' -f $settings.seriesName, [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss'), [Guid]::NewGuid().ToString('N')
@@ -125,10 +134,12 @@ try {
             replayPath = $replay; presentMonPath = $presentMon; resultsDirectory = $groupDirectory; reportPath = $reportPath
             periodicPathUpdates = $group.periodicPathUpdates; pathUpdateIntervalSeconds = $group.pathUpdateIntervalSeconds
             animatorCulling = $group.animatorCulling; updateWhenOffscreen = $group.updateWhenOffscreen
-            skinnedMotionVectors = $group.skinnedMotionVectors }
+            skinnedMotionVectors = $group.skinnedMotionVectors; graphics = $settings.graphics }
         Write-Json $request $requestPath
         $row = [pscustomobject][ordered]@{ run = $runId; group = $group.name; scene = $group.scene
             scenario = $group.scenario; allocation = $item.allocation; repetition = $item.repetition
+            screenWidth = $settings.graphics.width; screenHeight = $settings.graphics.height
+            fullscreen = $settings.graphics.fullscreen; qualityLevel = $settings.graphics.quality
             result = 'Running'; error = ''; captureDirectory = ''; exitCode = $null
             startedUtc = [DateTime]::UtcNow.ToString('o'); endedUtc = ''; reportPath = $reportPath; logPath = $logPath }
         $summary += $row
@@ -136,7 +147,8 @@ try {
         Write-Host ("[{0}/{1}] {2} / {3}, repetition {4}" -f ($index + 1), $plan.Count, $group.name, $item.allocation, $item.repetition)
         try {
             # The rendered game needs a visible window and focus for PresentMon measurements.
-            $arguments = '--benchmark-request "{0}" -logFile "{1}"' -f $requestPath, $logPath
+            $arguments = '--benchmark-request "{0}" -logFile "{1}" -screen-width {2} -screen-height {3} -screen-fullscreen {4} -screen-quality "{5}"' -f $requestPath, $logPath,
+                $settings.graphics.width, $settings.graphics.height, [int]$settings.graphics.fullscreen, $settings.graphics.quality
             $process = Start-Process -FilePath $game -ArgumentList $arguments -WorkingDirectory (Split-Path -Parent $game) -PassThru
             $deadline = [DateTime]::UtcNow.AddSeconds($settings.timeoutSeconds)
             while (!$process.HasExited -and [DateTime]::UtcNow -lt $deadline) {
@@ -160,6 +172,11 @@ try {
                 throw 'Capture directory is outside its configured group.'
             }
             $metadata = Get-Content -LiteralPath (Join-Path $capturePath 'session.json') -Raw | ConvertFrom-Json
+            foreach ($field in @('screenWidth','screenHeight','fullscreen','qualityLevel')) {
+                if ($null -eq $metadata.PSObject.Properties[$field]) {
+                    throw 'Capture is missing graphics metadata. Rebuild the game with graphics configuration support.'
+                }
+            }
             if ($metadata.result -ne 'Completed' -or $metadata.filteredFrames -le 0 -or
                 $metadata.scene -ne $request.scene -or $metadata.scenario -ne $request.scenario -or
                 $metadata.allocation -ne $request.allocation -or $metadata.processId -ne $process.Id -or
@@ -168,7 +185,9 @@ try {
                 $metadata.periodicPathUpdates -ne $request.periodicPathUpdates -or
                 [math]::Abs($metadata.pathUpdateIntervalSeconds - $request.pathUpdateIntervalSeconds) -gt 0.00001 -or
                 $metadata.updateWhenOffscreen -ne $request.updateWhenOffscreen -or
-                $metadata.skinnedMotionVectors -ne $request.skinnedMotionVectors) {
+                $metadata.skinnedMotionVectors -ne $request.skinnedMotionVectors -or
+                $metadata.screenWidth -ne $settings.graphics.width -or $metadata.screenHeight -ne $settings.graphics.height -or
+                $metadata.fullscreen -ne $settings.graphics.fullscreen -or $metadata.qualityLevel -cne $settings.graphics.quality) {
                 throw 'Capture metadata is invalid or does not match the request.'
             }
             $measured = Join-Path $capturePath 'measured.csv'

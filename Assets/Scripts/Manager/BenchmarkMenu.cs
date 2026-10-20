@@ -87,6 +87,7 @@ public class BenchmarkMenu : MonoBehaviour
 
     void SaveSettings()
     {
+        if (BenchmarkAutomation.Active) return;
         var saved = new SavedSettings {
             scene = SelectedScene,
             scenario = scenarios != null && scenarioIndex >= 0 && scenarioIndex < scenarios.Length && scenarios[scenarioIndex] != null
@@ -122,6 +123,22 @@ public class BenchmarkMenu : MonoBehaviour
         if (pathUpdateSettings != null)
             pathUpdateInterval = pathUpdateSettings.Interval.ToString("R", CultureInfo.InvariantCulture);
         folder = Path.Combine(Application.persistentDataPath, "Replays");
+        try
+        {
+            BenchmarkAutomation.Request request;
+            if (BenchmarkAutomation.TryRead(out request))
+            {
+                ApplyAutomation(request);
+                Launch();
+                return;
+            }
+        }
+        catch (Exception e)
+        {
+            Debug.LogError("Benchmark automation: " + e.Message);
+            BenchmarkAutomation.Complete("Failed", e.Message, null);
+            return;
+        }
         LoadSettings();
         RefreshFiles();
         var cameraObject = new GameObject("Menu Camera");
@@ -130,6 +147,32 @@ public class BenchmarkMenu : MonoBehaviour
         camera.backgroundColor = new Color(.06f, .09f, .13f);
         camera.cullingMask = 0;
     }
+
+    void ApplyAutomation(BenchmarkAutomation.Request request)
+    {
+        if (request.scene != gameScene && request.scene != experimentalScene)
+            throw new InvalidDataException("Unknown benchmark scene: " + request.scene);
+        useExperimentalScene = request.scene == experimentalScene;
+        scenarioIndex = scenarios == null ? -1 : Array.FindIndex(scenarios, s => s != null && s.name == request.scenario);
+        if (scenarioIndex < 0) throw new InvalidDataException("Unknown benchmark scenario: " + request.scenario);
+        if (request.allocation != "Pool" && request.allocation != "InstantiateDestroy")
+            throw new InvalidDataException("Unknown allocation: " + request.allocation);
+        allocationIndex = request.allocation == "Pool" ? 1 : 0;
+        animatorCullingIndex = Array.FindIndex(CullingModes, mode => mode.ToString() == request.animatorCulling);
+        if (animatorCullingIndex < 0) throw new InvalidDataException("Unknown animator culling mode.");
+        if (!Path.IsPathRooted(request.resultsDirectory ?? ""))
+            throw new InvalidDataException("Automation requires an absolute results directory.");
+        automatedResultsDirectory = request.resultsDirectory;
+        replayPath = request.replayPath;
+        presentMonPath = request.presentMonPath;
+        periodicPathUpdates = request.periodicPathUpdates;
+        pathUpdateInterval = request.pathUpdateIntervalSeconds.ToString("R", CultureInfo.InvariantCulture);
+        updateWhenOffscreen = request.updateWhenOffscreen;
+        skinnedMotionVectors = request.skinnedMotionVectors;
+        capture = true;
+    }
+
+    string automatedResultsDirectory;
 
     void RefreshFiles()
     {
@@ -188,10 +231,14 @@ public class BenchmarkMenu : MonoBehaviour
             loading = true;
             SceneManager.LoadScene(scene);
             lastBenchmark = description;
-            PlayerPrefs.SetString(PreferencesKey + ".LastBenchmark", lastBenchmark);
-            PlayerPrefs.Save();
+            if (!BenchmarkAutomation.Active)
+            {
+                PlayerPrefs.SetString(PreferencesKey + ".LastBenchmark", lastBenchmark);
+                PlayerPrefs.Save();
+            }
         }
-        catch (Exception e) { BenchmarkLaunch.Clear(); loading = false; error = e.Message; }
+        catch (Exception e) { BenchmarkLaunch.Clear(); loading = false; error = e.Message;
+            BenchmarkAutomation.Complete("Failed", e.Message, null); }
     }
 
     void LaunchNormalGame()
@@ -212,6 +259,7 @@ public class BenchmarkMenu : MonoBehaviour
 
     string GetResultsDirectory()
     {
+        if (BenchmarkAutomation.Active) return automatedResultsDirectory;
         string name = resultsFolder.Trim();
         if (name.Length == 0) return ResultsRoot;
         if (name == "." || name == ".." || name.EndsWith(".", StringComparison.Ordinal) ||
@@ -246,6 +294,7 @@ public class BenchmarkMenu : MonoBehaviour
 
     void OnGUI()
     {
+        if (BenchmarkAutomation.Active) return;
         float scale = Mathf.Max(.4f, Mathf.Min(Screen.width / 960f, Screen.height / 740f));
         Matrix4x4 previous = GUI.matrix;
         GUI.matrix = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(scale, scale, 1));

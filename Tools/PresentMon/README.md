@@ -33,7 +33,9 @@ Set Results subfolder in the menu to group captures under a category, for exampl
 Benchmarks/AI-tests/<unique-run>. The category is created automatically at launch,
 and the menu remembers it. Leave it empty to save directly under Benchmarks.
 Enter a single folder name; paths and reserved Windows names are rejected.
-There is no automatic repeat or return to menu after completion. Esc exits the build.
+Manual menu runs do not repeat or return to the menu after completion. Esc exits the build.
+For automated repetition with new series/group subfolders, see
+[BenchmarkSeries](../BenchmarkSeries/README.md). Rebuild the game to include automation support.
 
 Opening Level_01 directly in the Editor still uses its Inspector settings, including
 Record mode for making new recordings. The menu overrides apply only to the next
@@ -52,7 +54,7 @@ For direct scene testing without the menu:
    or run with the necessary Windows privileges, following upstream documentation.
    The game records the failure instead of silently running an unmeasured benchmark.
 
-No automatic repeats. Existing benchmarks work without PresentMon when its checkbox
+Manual runs do not repeat automatically. Existing benchmarks work without PresentMon when its checkbox
 is off. The executable is not automatically copied by Unity's build pipeline.
 
 ## Uncapped benchmark and replacement scenarios

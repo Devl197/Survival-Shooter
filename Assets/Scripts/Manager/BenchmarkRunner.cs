@@ -195,6 +195,7 @@ BenchmarkSchedule schedule;
             status = "Failed";
             Cleanup();
             Debug.LogError("Benchmark failed: " + exception.Message, this);
+            BenchmarkAutomation.Complete("Failed", exception.Message, null);
         }
     }
 
@@ -285,6 +286,7 @@ BenchmarkSchedule schedule;
             ", active=" + activeCount + ", pool expansions=" + poolExpansions +
             ". Final cleanup is excluded from these counters.", this);
         Cleanup();
+        BenchmarkAutomation.Complete(result, null, null);
     }
 
     void Cleanup()
@@ -377,13 +379,17 @@ BenchmarkSchedule schedule;
         {
             status = "Failed";
             Debug.LogError("PresentMon did not become ready. Check capture.log and ETW permissions.", this);
+            string failedDirectory = capture != null ? capture.DirectoryPath : null;
+            string failure = "Readiness cancelled, timed out or lost focus.";
             if (capture != null)
             {
                 capture.Run.result = "CaptureFailed";
-                if (string.IsNullOrEmpty(capture.Run.error)) capture.Run.error = "Readiness cancelled, timed out or lost focus. " + capture.Error;
+                if (string.IsNullOrEmpty(capture.Run.error)) capture.Run.error = failure + " " + capture.Error;
+                failure = capture.Run.error;
                 capture.Dispose(); capture = null;
             }
             Cleanup();
+            BenchmarkAutomation.Complete("CaptureFailed", failure, failedDirectory);
             yield break;
         }
         replay.Stopping += ReplayStopping;
@@ -437,8 +443,14 @@ BenchmarkSchedule schedule;
             status = capture.Run.result;
             Debug.Log("PresentMon " + status + ": " + capture.DirectoryPath, this);
         }
-        catch (Exception e) { status = "Failed"; Debug.LogError(e.Message, this); }
-        finally { capture.Dispose(); capture = null; finalizingCapture = false; Cleanup(); }
+        catch (Exception e) { status = "Failed"; capture.Run.error = e.Message; Debug.LogError(e.Message, this); }
+        finally
+        {
+            string directory = capture.DirectoryPath;
+            string captureError = capture.Run.error;
+            capture.Dispose(); capture = null; finalizingCapture = false; Cleanup();
+            BenchmarkAutomation.Complete(status, captureError, directory);
+        }
     }
 
     void RestorePreparation()

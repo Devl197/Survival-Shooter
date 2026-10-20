@@ -1,0 +1,207 @@
+#requires -Version 5.1
+[CmdletBinding()]
+param(
+    [string]$Config = (Join-Path $PSScriptRoot 'series.example.json'),
+    [switch]$ValidateOnly
+)
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+function Assert-Properties($Object, [string[]]$Names, [string]$Context) {
+    if ($null -eq $Object) { throw "Missing $Context" }
+    foreach ($property in $Object.PSObject.Properties.Name) {
+        if ($Names -notcontains $property) { throw "Unknown property '$property' in $Context" }
+    }
+    foreach ($name in $Names) {
+        if ($null -eq $Object.PSObject.Properties[$name]) { throw "Missing '$name' in $Context" }
+    }
+}
+function Assert-Name([string]$Name) {
+    if ([string]::IsNullOrWhiteSpace($Name) -or $Name.Length -gt 80 -or
+        $Name -ne $Name.Trim() -or $Name.EndsWith('.') -or
+        $Name -match '[<>:"/\\|?*\x00-\x1f]' -or $Name -in @('.', '..') -or
+        $Name -match '^(CON|PRN|AUX|NUL|COM[1-9\u00b9\u00b2\u00b3]|LPT[1-9\u00b9\u00b2\u00b3])(\.|$)') {
+        throw "Invalid folder name: '$Name'"
+    }
+}
+function Assert-Number($Value, [double]$Minimum, [double]$Maximum, [bool]$Integer, [string]$Name) {
+    if ($Value -is [bool] -or $Value -is [string] -or $null -eq $Value) { throw "Invalid number: $Name" }
+    $number = [double]$Value
+    if ([double]::IsNaN($number) -or [double]::IsInfinity($number) -or $number -lt $Minimum -or
+        $number -gt $Maximum -or ($Integer -and $number -ne [math]::Floor($number))) { throw "Invalid number: $Name" }
+}
+function Resolve-ConfigPath([string]$Path) {
+    if ([string]::IsNullOrWhiteSpace($Path)) { throw 'Empty path in configuration.' }
+    $expanded = [Environment]::ExpandEnvironmentVariables($Path)
+    if (![IO.Path]::IsPathRooted($expanded)) { $expanded = Join-Path $configDirectory $expanded }
+    return [IO.Path]::GetFullPath($expanded)
+}
+function Write-Json($Value, [string]$Path) {
+    $json = ConvertTo-Json -InputObject $Value -Depth 12
+    [IO.File]::WriteAllText($Path, $json, (New-Object Text.UTF8Encoding($false)))
+}
+
+$configPath = (Resolve-Path -LiteralPath $Config).Path
+$configDirectory = Split-Path -Parent $configPath
+$settings = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
+Assert-Properties $settings @('seriesName','gameExecutable','presentMonPath','replayPath','resultsRoot',
+    'repetitions','pauseSeconds','timeoutSeconds','continueOnFailure','groups') 'series'
+Assert-Name $settings.seriesName
+Assert-Number $settings.repetitions 1 10000 $true 'repetitions'
+Assert-Number $settings.pauseSeconds 0 3600 $false 'pauseSeconds'
+Assert-Number $settings.timeoutSeconds 1 86400 $true 'timeoutSeconds'
+if ($settings.continueOnFailure -isnot [bool]) { throw 'continueOnFailure must be a JSON boolean.' }
+$game = Resolve-ConfigPath $settings.gameExecutable
+$presentMon = Resolve-ConfigPath $settings.presentMonPath
+$replay = Resolve-ConfigPath $settings.replayPath
+$resultsRoot = Resolve-ConfigPath $settings.resultsRoot
+foreach ($file in @($game, $presentMon, $replay)) {
+    if (!(Test-Path -LiteralPath $file -PathType Leaf)) { throw "File not found: $file" }
+    if ($file.Contains('"')) { throw "Unsupported quote in path: $file" }
+}
+$replayData = Get-Content -LiteralPath $replay -Raw | ConvertFrom-Json
+Assert-Number $replayData.duration 0.001 86400 $false 'replay.duration'
+if ((Get-FileHash -LiteralPath $presentMon -Algorithm SHA256).Hash -ne
+    'B2A706BC6AD475749E3B7E3409263AA1E6906D45BDCF993F6DBC0F660188F1AF') {
+    throw 'PresentMon must be the pinned 2.6.0 executable.'
+}
+if ($settings.groups -isnot [array] -or $settings.groups.Count -eq 0) { throw 'groups must be a nonempty JSON array.' }
+$names = @{}
+$plan = @()
+foreach ($group in $settings.groups) {
+    Assert-Properties $group @('name','scene','scenario','allocations','periodicPathUpdates',
+        'pathUpdateIntervalSeconds','animatorCulling','updateWhenOffscreen','skinnedMotionVectors') 'group'
+    Assert-Name $group.name
+    if ($group.name -eq '_automation') { throw 'The group name _automation is reserved for series logs.' }
+    if ($names.ContainsKey($group.name)) { throw "Duplicate group: $($group.name)" }
+    $names[$group.name] = $true
+    if ($group.scene -notin @('Level_01','Level_01_VisualExperiment')) { throw "Unknown scene: $($group.scene)" }
+    if ($group.scenario -notin @('BenchmarkContinuous','BenchmarkBurst','BenchmarkFrequent','BenchmarkGrouped')) {
+        throw "Unknown scenario: $($group.scenario)"
+    }
+    if ($group.animatorCulling -notin @('AlwaysAnimate','CullUpdateTransforms','CullCompletely')) { throw 'Unknown animatorCulling.' }
+    Assert-Number $group.pathUpdateIntervalSeconds 0.01 86400 $false 'pathUpdateIntervalSeconds'
+    foreach ($flag in @('periodicPathUpdates','updateWhenOffscreen','skinnedMotionVectors')) {
+        if ($group.$flag -isnot [bool]) { throw "$flag must be a JSON boolean." }
+    }
+    if ($group.allocations -isnot [array] -or $group.allocations.Count -eq 0 -or
+        @($group.allocations | Select-Object -Unique).Count -ne $group.allocations.Count) { throw 'allocations must be a nonempty array without duplicates.' }
+    foreach ($allocation in $group.allocations) {
+        if ($allocation -cnotin @('Pool','InstantiateDestroy')) { throw "Unknown allocation: $allocation" }
+    }
+}
+# Complete one round across all groups before starting the next repetition.
+for ($repeat = 0; $repeat -lt $settings.repetitions; $repeat++) {
+    foreach ($group in $settings.groups) {
+        # Keep rotating allocations within each group between repetitions.
+        for ($mode = 0; $mode -lt $group.allocations.Count; $mode++) {
+            $plan += [pscustomobject]@{ group = $group; repetition = $repeat + 1
+                allocation = $group.allocations[($mode + $repeat) % $group.allocations.Count] }
+        }
+    }
+}
+$plan | Select-Object @{n='Group';e={$_.group.name}}, repetition, allocation | Format-Table | Out-Host
+Write-Host ("Planned runs: {0}; results root: {1}" -f $plan.Count, $resultsRoot)
+if ($ValidateOnly) { return }
+
+$seriesId = '{0}-{1}-{2}' -f $settings.seriesName, [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss'), [Guid]::NewGuid().ToString('N')
+$seriesDirectory = Join-Path $resultsRoot $seriesId
+$controlDirectory = Join-Path $seriesDirectory '_automation'
+[void][IO.Directory]::CreateDirectory($controlDirectory)
+Write-Json $settings (Join-Path $controlDirectory 'series.json')
+foreach ($group in $settings.groups) { [void][IO.Directory]::CreateDirectory((Join-Path $seriesDirectory $group.name)) }
+$summary = @()
+$process = $null
+try {
+    for ($index = 0; $index -lt $plan.Count; $index++) {
+        $item = $plan[$index]
+        $group = $item.group
+        $runId = 'run-{0:D4}' -f ($index + 1)
+        $requestPath = Join-Path $controlDirectory "$runId.request.json"
+        $reportPath = Join-Path $controlDirectory "$runId.report.json"
+        $logPath = Join-Path $controlDirectory "$runId.player.log"
+        $groupDirectory = Join-Path $seriesDirectory $group.name
+        $request = [ordered]@{ scene = $group.scene; scenario = $group.scenario; allocation = $item.allocation
+            replayPath = $replay; presentMonPath = $presentMon; resultsDirectory = $groupDirectory; reportPath = $reportPath
+            periodicPathUpdates = $group.periodicPathUpdates; pathUpdateIntervalSeconds = $group.pathUpdateIntervalSeconds
+            animatorCulling = $group.animatorCulling; updateWhenOffscreen = $group.updateWhenOffscreen
+            skinnedMotionVectors = $group.skinnedMotionVectors }
+        Write-Json $request $requestPath
+        $row = [pscustomobject][ordered]@{ run = $runId; group = $group.name; scene = $group.scene
+            scenario = $group.scenario; allocation = $item.allocation; repetition = $item.repetition
+            result = 'Running'; error = ''; captureDirectory = ''; exitCode = $null
+            startedUtc = [DateTime]::UtcNow.ToString('o'); endedUtc = ''; reportPath = $reportPath; logPath = $logPath }
+        $summary += $row
+        Write-Json @($summary) (Join-Path $controlDirectory 'summary.json')
+        Write-Host ("[{0}/{1}] {2} / {3}, repetition {4}" -f ($index + 1), $plan.Count, $group.name, $item.allocation, $item.repetition)
+        try {
+            # The rendered game needs a visible window and focus for PresentMon measurements.
+            $arguments = '--benchmark-request "{0}" -logFile "{1}"' -f $requestPath, $logPath
+            $process = Start-Process -FilePath $game -ArgumentList $arguments -WorkingDirectory (Split-Path -Parent $game) -PassThru
+            $deadline = [DateTime]::UtcNow.AddSeconds($settings.timeoutSeconds)
+            while (!$process.HasExited -and [DateTime]::UtcNow -lt $deadline) {
+                Start-Sleep -Milliseconds 250
+                $process.Refresh()
+            }
+            if (!$process.HasExited) {
+                Stop-Process -Id $process.Id -Force
+                $process.WaitForExit()
+                throw 'Timeout: the game did not exit before timeoutSeconds.'
+            }
+            $process.WaitForExit()
+            $row.exitCode = $process.ExitCode
+            if (!(Test-Path -LiteralPath $reportPath)) { throw 'Missing automation report. Rebuild the game with automation support; see player log.' }
+            $report = Get-Content -LiteralPath $reportPath -Raw | ConvertFrom-Json
+            $row.result = $report.result
+            $row.captureDirectory = $report.captureDirectory
+            if ($report.result -ne 'Completed' -or $process.ExitCode -ne 0) { throw "Game result: $($report.result). $($report.error)" }
+            $capturePath = [IO.Path]::GetFullPath($report.captureDirectory)
+            if (!(Split-Path -Parent $capturePath).Equals($groupDirectory, [StringComparison]::OrdinalIgnoreCase)) {
+                throw 'Capture directory is outside its configured group.'
+            }
+            $metadata = Get-Content -LiteralPath (Join-Path $capturePath 'session.json') -Raw | ConvertFrom-Json
+            if ($metadata.result -ne 'Completed' -or $metadata.filteredFrames -le 0 -or
+                $metadata.scene -ne $request.scene -or $metadata.scenario -ne $request.scenario -or
+                $metadata.allocation -ne $request.allocation -or $metadata.processId -ne $process.Id -or
+                $metadata.replayFile -ne $request.replayPath -or !$metadata.enemyCullingOverridden -or
+                $metadata.animatorCullingMode -ne $request.animatorCulling -or
+                $metadata.periodicPathUpdates -ne $request.periodicPathUpdates -or
+                [math]::Abs($metadata.pathUpdateIntervalSeconds - $request.pathUpdateIntervalSeconds) -gt 0.00001 -or
+                $metadata.updateWhenOffscreen -ne $request.updateWhenOffscreen -or
+                $metadata.skinnedMotionVectors -ne $request.skinnedMotionVectors) {
+                throw 'Capture metadata is invalid or does not match the request.'
+            }
+            $measured = Join-Path $capturePath 'measured.csv'
+            $frames = 0
+            Import-Csv -LiteralPath $measured | ForEach-Object {
+                $frameTime = [double]::Parse($_.FrameTime, [Globalization.CultureInfo]::InvariantCulture)
+                if ([double]::IsNaN($frameTime) -or [double]::IsInfinity($frameTime) -or $frameTime -le 0) { throw 'Invalid measured FrameTime.' }
+                $frames++
+            }
+            if ($frames -ne $metadata.filteredFrames) { throw 'Measured frame count does not match session.json.' }
+        }
+        catch { $row.result = 'Failed'; $row.error = $_.Exception.Message; Write-Warning $row.error }
+        finally {
+            if ($row.result -eq 'Running') { $row.result = 'Aborted'; $row.error = 'Series execution was interrupted.' }
+            if ($null -ne $process) {
+                if (!$process.HasExited) { Stop-Process -Id $process.Id -Force; $process.WaitForExit() }
+                $process.Dispose(); $process = $null
+            }
+            $row.endedUtc = [DateTime]::UtcNow.ToString('o')
+            Write-Json @($summary) (Join-Path $controlDirectory 'summary.json')
+            $summary | Export-Csv -LiteralPath (Join-Path $controlDirectory 'summary.csv') -NoTypeInformation -Encoding UTF8
+        }
+        if ($row.result -ne 'Completed' -and !$settings.continueOnFailure) { break }
+        if ($index -lt $plan.Count - 1 -and $settings.pauseSeconds -gt 0) {
+            Start-Sleep -Milliseconds ([int]($settings.pauseSeconds * 1000))
+        }
+    }
+}
+finally {
+    if ($null -ne $process) {
+        if (!$process.HasExited) { Stop-Process -Id $process.Id -Force }
+        $process.Dispose()
+    }
+    Write-Host "Series results: $seriesDirectory"
+}
+if (@($summary | Where-Object result -ne 'Completed').Count -gt 0) { throw 'Some benchmarks failed. See _automation/summary.csv and player logs.' }

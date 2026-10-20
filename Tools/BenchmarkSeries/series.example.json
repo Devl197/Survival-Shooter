@@ -1,0 +1,35 @@
+{
+  "seriesName": "Poredjenje-alokacije",
+  "gameExecutable": "../../Build/Survival Shooter.exe",
+  "presentMonPath": "../PresentMon/PresentMon-2.6.0-x64.exe",
+  "replayPath": "%USERPROFILE%/AppData/LocalLow/DefaultCompany/Survival Shooter/Replays/REPLACE-ME.json",
+  "resultsRoot": "%USERPROFILE%/AppData/LocalLow/DefaultCompany/Survival Shooter/Benchmarks",
+  "repetitions": 5,
+  "pauseSeconds": 10,
+  "timeoutSeconds": 300,
+  "continueOnFailure": true,
+  "groups": [
+    {
+      "name": "Original-periodic",
+      "scene": "Level_01",
+      "scenario": "BenchmarkContinuous",
+      "allocations": ["InstantiateDestroy", "Pool"],
+      "periodicPathUpdates": true,
+      "pathUpdateIntervalSeconds": 0.2,
+      "animatorCulling": "CullUpdateTransforms",
+      "updateWhenOffscreen": false,
+      "skinnedMotionVectors": true
+    },
+    {
+      "name": "Visual-periodic",
+      "scene": "Level_01_VisualExperiment",
+      "scenario": "BenchmarkContinuous",
+      "allocations": ["InstantiateDestroy", "Pool"],
+      "periodicPathUpdates": true,
+      "pathUpdateIntervalSeconds": 0.2,
+      "animatorCulling": "CullUpdateTransforms",
+      "updateWhenOffscreen": false,
+      "skinnedMotionVectors": true
+    }
+  ]
+}

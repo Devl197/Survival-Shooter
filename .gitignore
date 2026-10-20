@@ -83,6 +83,7 @@ crashlytics-build.properties
 /Tools/BenchmarkAnalysis/tmp/
 /Tools/BenchmarkAnalysis/*.xlsm
 /Tools/BenchmarkAnalysis/~$*
+/Tools/BenchmarkSeries/*.local.json
 
 # Local dependencies and Python caches.
 node_modules/

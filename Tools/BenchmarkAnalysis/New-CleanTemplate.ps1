@@ -26,7 +26,9 @@ $app=$null;$book=$null
 try {
     $app=New-Object -ComObject Excel.Application
     $app.Visible=$false
+    $app.DisplayAlerts=$false
     $book=$app.Workbooks.Open($copy,0,$false)
+    Write-Output 'Preparing clean copy...'
     foreach($sheet in @('Testovi','Frejmovi')){
         $ws=$book.Worksheets($sheet)
         $lastRow=$ws.UsedRange.Row+$ws.UsedRange.Rows.Count-1
@@ -37,6 +39,28 @@ try {
         }
         if($lastRow -gt 6){[void]$ws.Rows.Item('7:'+$lastRow).Delete()}
         [void]$ws.UsedRange
+    }
+    if(@($book.Worksheets | Where-Object {$_.Name -eq 'Grupe'}).Count -eq 1){
+        Write-Output 'Clearing groups...'
+        $members=$book.Worksheets('Grupe').ListObjects('tblMembership')
+        if($null -ne $members.DataBodyRange){$members.DataBodyRange.Delete()}
+        [void]$members.ListRows.Add()
+        $members.ListColumns(2).DataBodyRange.Interior.Color=13431551
+        $data=$book.Worksheets('GrupniPodaci')
+        $readyFormula=$data.Range('EN2').Formula
+        $last=$data.UsedRange.Row+$data.UsedRange.Rows.Count-1
+        $data.Range('EN3:ER3').ClearContents()
+        if($last -ge 4){[void]$data.Rows.Item('4:'+$last).Delete()}
+        $data.Range('EN2').Formula=$readyFormula
+        $comparison=$book.Worksheets('Poredjenje')
+        $comparison.Range('B9:I16').ClearContents()
+        $comparison.Range('C80:J88').ClearContents()
+        $comparison.Range('C91:J211').ClearContents()
+        foreach($chart in $comparison.ChartObjects()){
+            while($chart.Chart.SeriesCollection().Count -gt 0){$chart.Chart.SeriesCollection(1).Delete()}
+            $chart.Chart.HasLegend=$false
+        }
+        $book.Names('GroupsReady').RefersTo='=GrupniPodaci!$EN$2'
     }
     $cfg=$book.Worksheets('Podesavanja');$view=$book.Worksheets('Pregled')
     $view.Range('D4').ClearContents()

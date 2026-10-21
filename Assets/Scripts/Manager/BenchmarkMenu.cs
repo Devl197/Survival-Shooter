@@ -337,7 +337,8 @@ public class BenchmarkMenu : MonoBehaviour
         if (scenarios != null)
         {
             string[] names = Array.ConvertAll(scenarios, s => s == null ? "Missing scenario" : s.name);
-            if (names.Length > 0) scenarioIndex = GUILayout.SelectionGrid(scenarioIndex, names, 2, GUILayout.Height(64));
+            if (names.Length > 0) scenarioIndex = GUILayout.SelectionGrid(scenarioIndex, names, 2,
+                GUILayout.Height(32 * Mathf.CeilToInt(names.Length / 2f)));
             if (scenarioIndex < scenarios.Length && scenarios[scenarioIndex] != null)
             {
                 var s = scenarios[scenarioIndex];

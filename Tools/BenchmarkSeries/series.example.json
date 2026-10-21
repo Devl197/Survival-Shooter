@@ -1,7 +1,7 @@
 {
   "seriesName": "Poredjenje-alokacije",
-  "gameExecutable": "../../Build/Survival Shooter.exe",
-  "presentMonPath": "../PresentMon/PresentMon-2.6.0-x64.exe",
+  "gameExecutable": "Survival Shooter.exe",
+  "presentMonPath": "Tools/PresentMon/PresentMon-2.6.0-x64.exe",
   "replayPath": "%USERPROFILE%/AppData/LocalLow/DefaultCompany/Survival Shooter/Replays/REPLACE-ME.json",
   "resultsRoot": "%USERPROFILE%/AppData/LocalLow/DefaultCompany/Survival Shooter/Benchmarks",
   "repetitions": 5,

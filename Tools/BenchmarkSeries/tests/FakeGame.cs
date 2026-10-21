@@ -30,6 +30,7 @@ class FakeGame
         File.WriteAllText(Path.Combine(directory, "measured.csv"), mode == "bad-frame" ? "FrameTime\nNaN\n20\n" : "FrameTime\n10\n20\n");
         File.WriteAllText(Path.Combine(directory, "session.json"), json.Serialize(new {
             result = "Completed", filteredFrames = mode == "bad-count" ? 3 : 2,
+            unityProfiler = Array.IndexOf(args, "--benchmark-profiler-log") >= 0,
             scene = request["scene"], scenario = request["scenario"], allocation = request["allocation"],
             processId = System.Diagnostics.Process.GetCurrentProcess().Id, replayFile = replay,
             screenWidth = Convert.ToInt32(graphics["width"]) + (mode == "bad-resolution" ? 1 : 0),
@@ -40,6 +41,23 @@ class FakeGame
             pathUpdateIntervalSeconds = request["pathUpdateIntervalSeconds"],
             updateWhenOffscreen = request["updateWhenOffscreen"], skinnedMotionVectors = request["skinnedMotionVectors"]
         }));
+        if (Array.IndexOf(args, "--benchmark-profiler-log") >= 0 && mode != "missing-profiler")
+        {
+            int profilerArgument = Array.IndexOf(args, "--benchmark-profiler-directory");
+            if (profilerArgument < 0 || profilerArgument + 1 >= args.Length || !Path.IsPathRooted(args[profilerArgument + 1]))
+                throw new Exception("Missing absolute Profiler directory argument.");
+            string profilerDirectory = args[profilerArgument + 1];
+            Directory.CreateDirectory(profilerDirectory);
+            // Deliberately fake bytes for orchestration tests; not a Unity profile.
+            File.WriteAllText(Path.Combine(profilerDirectory, "segment-0001.raw"), mode == "empty-profiler" ? "" : "test-double");
+            File.WriteAllText(Path.Combine(profilerDirectory, "profiler.json"), json.Serialize(new {
+                result = "Completed", scenario = request["scenario"], allocation = request["allocation"],
+                framesPerSegment = 200, spawned = 420, removed = mode == "bad-profiler-counters" ? 119 : 120,
+                poolExpansions = 0,
+                segments = new[] { new { file = "segment-0001.raw", startFrame = 10,
+                    endFrame = mode == "oversized-profiler" ? 211 : 210, startSeconds = 0, endSeconds = 30 } }
+            }));
+        }
         File.WriteAllText((string)request["reportPath"], json.Serialize(new {
             result = mode == "failed" ? "CaptureFailed" : "Completed", error = "", captureDirectory = directory
         }));

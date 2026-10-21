@@ -13,10 +13,10 @@ MonoBehaviour:
   m_Name: BenchmarkBurst
   m_EditorClassIdentifier: 
   pattern: 1
-  enemyCount: 100
+  enemyCount: 300
   groupSize: 10
   replacementInterval: 2
-  initialLifetime: 5
+  initialLifetime: 4
   deathDuration: 2
   seed: 12345
   typeWeights: 010000000100000001000000

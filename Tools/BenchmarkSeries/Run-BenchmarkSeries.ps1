@@ -7,10 +7,10 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-function Assert-Properties($Object, [string[]]$Names, [string]$Context) {
+function Assert-Properties($Object, [string[]]$Names, [string]$Context, [string[]]$Optional = @()) {
     if ($null -eq $Object) { throw "Missing $Context" }
     foreach ($property in $Object.PSObject.Properties.Name) {
-        if ($Names -notcontains $property) { throw "Unknown property '$property' in $Context" }
+        if ($Names -notcontains $property -and $Optional -notcontains $property) { throw "Unknown property '$property' in $Context" }
     }
     foreach ($name in $Names) {
         if ($null -eq $Object.PSObject.Properties[$name]) { throw "Missing '$name' in $Context" }
@@ -45,7 +45,12 @@ $configPath = (Resolve-Path -LiteralPath $Config).Path
 $configDirectory = Split-Path -Parent $configPath
 $settings = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
 Assert-Properties $settings @('seriesName','gameExecutable','presentMonPath','replayPath','resultsRoot',
-    'repetitions','pauseSeconds','timeoutSeconds','continueOnFailure','graphics','groups') 'series'
+    'repetitions','pauseSeconds','timeoutSeconds','continueOnFailure','graphics','groups') 'series' @('unityProfiler')
+$unityProfiler = $false
+if ($null -ne $settings.PSObject.Properties['unityProfiler']) {
+    if ($settings.unityProfiler -isnot [bool]) { throw 'unityProfiler must be a JSON boolean.' }
+    $unityProfiler = $settings.unityProfiler
+}
 Assert-Name $settings.seriesName
 Assert-Number $settings.repetitions 1 10000 $true 'repetitions'
 Assert-Number $settings.pauseSeconds 0 3600 $false 'pauseSeconds'
@@ -68,6 +73,9 @@ foreach ($file in @($game, $presentMon, $replay)) {
 }
 $replayData = Get-Content -LiteralPath $replay -Raw | ConvertFrom-Json
 Assert-Number $replayData.duration 0.001 86400 $false 'replay.duration'
+if ($unityProfiler -and [math]::Abs($replayData.duration - 30) -gt 0.0001) {
+    throw 'The diagnostic Profiler series requires a 30-second replay.'
+}
 if ((Get-FileHash -LiteralPath $presentMon -Algorithm SHA256).Hash -ne
     'B2A706BC6AD475749E3B7E3409263AA1E6906D45BDCF993F6DBC0F660188F1AF') {
     throw 'PresentMon must be the pinned 2.6.0 executable.'
@@ -83,8 +91,13 @@ foreach ($group in $settings.groups) {
     if ($names.ContainsKey($group.name)) { throw "Duplicate group: $($group.name)" }
     $names[$group.name] = $true
     if ($group.scene -notin @('Level_01','Level_01_VisualExperiment')) { throw "Unknown scene: $($group.scene)" }
-    if ($group.scenario -notin @('BenchmarkContinuous','BenchmarkBurst','BenchmarkFrequent','BenchmarkGrouped')) {
+    if ($group.scenario -notin @('BenchmarkContinuous50','BenchmarkBurst50',
+        'BenchmarkContinuous100','BenchmarkBurst100','BenchmarkContinuous','BenchmarkBurst',
+        'BenchmarkFrequent','BenchmarkGrouped')) {
         throw "Unknown scenario: $($group.scenario)"
+    }
+    if ($unityProfiler -and $group.scenario -notin @('BenchmarkContinuous','BenchmarkBurst')) {
+        throw 'This diagnostic Profiler series supports Continuous 300 and Burst 300 only.'
     }
     if ($group.animatorCulling -notin @('AlwaysAnimate','CullUpdateTransforms','CullCompletely')) { throw 'Unknown animatorCulling.' }
     Assert-Number $group.pathUpdateIntervalSeconds 0.01 86400 $false 'pathUpdateIntervalSeconds'
@@ -97,18 +110,33 @@ foreach ($group in $settings.groups) {
         if ($allocation -cnotin @('Pool','InstantiateDestroy')) { throw "Unknown allocation: $allocation" }
     }
 }
-# Complete one round across all groups before starting the next repetition.
+# Offset the second allocation stream so both scenario and allocation change.
+# Small or mixed-allocation series retain paired rotation as a fallback.
+$interleaveScenarios = $settings.groups.Count -ge 4 -and $settings.groups[0].allocations.Count -eq 2
+foreach ($group in $settings.groups) {
+    if (($group.allocations -join ',') -ne ($settings.groups[0].allocations -join ',')) {
+        $interleaveScenarios = $false
+    }
+}
+$scenarioOffset = [math]::Max(3, [math]::Floor($settings.groups.Count / 2))
 for ($repeat = 0; $repeat -lt $settings.repetitions; $repeat++) {
-    foreach ($group in $settings.groups) {
-        # Keep rotating allocations within each group between repetitions.
-        for ($mode = 0; $mode -lt $group.allocations.Count; $mode++) {
+    for ($position = 0; $position -lt $settings.groups.Count; $position++) {
+        $baseGroup = $settings.groups[($position + $repeat) % $settings.groups.Count]
+        for ($mode = 0; $mode -lt $baseGroup.allocations.Count; $mode++) {
+            $group = $baseGroup
+            $allocationIndex = ($mode + $repeat) % $group.allocations.Count
+            if ($interleaveScenarios) {
+                $group = $settings.groups[($position + $repeat + $mode * $scenarioOffset) % $settings.groups.Count]
+                $allocationIndex = $mode
+            }
             $plan += [pscustomobject]@{ group = $group; repetition = $repeat + 1
-                allocation = $group.allocations[($mode + $repeat) % $group.allocations.Count] }
+                allocation = $group.allocations[$allocationIndex] }
         }
     }
 }
 $plan | Select-Object @{n='Group';e={$_.group.name}}, repetition, allocation | Format-Table | Out-Host
 Write-Host ("Planned runs: {0}; results root: {1}" -f $plan.Count, $resultsRoot)
+Write-Host ("Unity Profiler segmented recording: {0}" -f $unityProfiler)
 Write-Host ('Graphics for every run: {0}x{1}; fullscreen={2}; quality={3}' -f $settings.graphics.width,
     $settings.graphics.height, $settings.graphics.fullscreen, $settings.graphics.quality)
 if ($ValidateOnly) { return }
@@ -130,6 +158,7 @@ try {
         $reportPath = Join-Path $controlDirectory "$runId.report.json"
         $logPath = Join-Path $controlDirectory "$runId.player.log"
         $groupDirectory = Join-Path $seriesDirectory $group.name
+        $profilerDirectory = if ($unityProfiler) { Join-Path $groupDirectory "$runId-profiler" } else { '' }
         $request = [ordered]@{ scene = $group.scene; scenario = $group.scenario; allocation = $item.allocation
             replayPath = $replay; presentMonPath = $presentMon; resultsDirectory = $groupDirectory; reportPath = $reportPath
             periodicPathUpdates = $group.periodicPathUpdates; pathUpdateIntervalSeconds = $group.pathUpdateIntervalSeconds
@@ -140,7 +169,7 @@ try {
             scenario = $group.scenario; allocation = $item.allocation; repetition = $item.repetition
             screenWidth = $settings.graphics.width; screenHeight = $settings.graphics.height
             fullscreen = $settings.graphics.fullscreen; qualityLevel = $settings.graphics.quality
-            result = 'Running'; error = ''; captureDirectory = ''; exitCode = $null
+            result = 'Running'; error = ''; captureDirectory = ''; profilerDirectory = $profilerDirectory; exitCode = $null
             startedUtc = [DateTime]::UtcNow.ToString('o'); endedUtc = ''; reportPath = $reportPath; logPath = $logPath }
         $summary += $row
         Write-Json @($summary) (Join-Path $controlDirectory 'summary.json')
@@ -149,6 +178,9 @@ try {
             # The rendered game needs a visible window and focus for PresentMon measurements.
             $arguments = '--benchmark-request "{0}" -logFile "{1}" -screen-width {2} -screen-height {3} -screen-fullscreen {4} -screen-quality "{5}"' -f $requestPath, $logPath,
                 $settings.graphics.width, $settings.graphics.height, [int]$settings.graphics.fullscreen, $settings.graphics.quality
+            if ($unityProfiler) {
+                $arguments += ' --benchmark-profiler-log --benchmark-profiler-directory "{0}"' -f $profilerDirectory
+            }
             $process = Start-Process -FilePath $game -ArgumentList $arguments -WorkingDirectory (Split-Path -Parent $game) -PassThru
             $deadline = [DateTime]::UtcNow.AddSeconds($settings.timeoutSeconds)
             while (!$process.HasExited -and [DateTime]::UtcNow -lt $deadline) {
@@ -198,6 +230,28 @@ try {
                 $frames++
             }
             if ($frames -ne $metadata.filteredFrames) { throw 'Measured frame count does not match session.json.' }
+            if ($unityProfiler) {
+                if ($null -eq $metadata.PSObject.Properties['unityProfiler'] -or !$metadata.unityProfiler) {
+                    throw 'Capture does not confirm Unity Profiler recording. Rebuild the game.'
+                }
+                $profile = Get-Content -LiteralPath (Join-Path $profilerDirectory 'profiler.json') -Raw | ConvertFrom-Json
+                if ($profile.result -ne 'Completed' -or $profile.scenario -ne $request.scenario -or
+                    $profile.allocation -ne $request.allocation -or @($profile.segments).Count -eq 0 -or
+                    $profile.framesPerSegment -ne 200 -or $profile.removed -ne 120 -or $profile.spawned -ne 420 -or
+                    $profile.poolExpansions -ne 0) {
+                    throw 'Profiler capture is incomplete or does not match the diagnostic scenario.'
+                }
+                foreach ($segment in $profile.segments) {
+                    if ([IO.Path]::GetFileName($segment.file) -cne $segment.file -or $segment.file -notmatch '^segment-\d{4,}\.raw$') {
+                        throw 'Invalid Profiler segment filename.'
+                    }
+                    $segmentPath = Join-Path $profilerDirectory $segment.file
+                    if (!(Test-Path -LiteralPath $segmentPath -PathType Leaf) -or (Get-Item -LiteralPath $segmentPath).Length -eq 0 -or
+                        $segment.endFrame -lt $segment.startFrame -or $segment.endFrame - $segment.startFrame -gt 200) {
+                        throw 'Missing, empty or oversized Profiler segment.'
+                    }
+                }
+            }
         }
         catch { $row.result = 'Failed'; $row.error = $_.Exception.Message; Write-Warning $row.error }
         finally {

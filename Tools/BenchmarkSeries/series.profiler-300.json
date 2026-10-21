@@ -1,0 +1,48 @@
+{
+  "seriesName": "GC-Spawn-300-30s",
+  "gameExecutable": "Survival Shooter.exe",
+  "presentMonPath": "Tools/PresentMon/PresentMon-2.6.0-x64.exe",
+  "replayPath": "session.json",
+  "resultsRoot": "%USERPROFILE%/AppData/LocalLow/DefaultCompany/Survival Shooter/Benchmarks",
+  "repetitions": 6,
+  "pauseSeconds": 10,
+  "timeoutSeconds": 600,
+  "continueOnFailure": true,
+  "graphics": {
+    "width": 1920,
+    "height": 1080,
+    "fullscreen": false,
+    "quality": "Ultra"
+  },
+  "groups": [
+    {
+      "name": "Continuous-300",
+      "scene": "Level_01",
+      "scenario": "BenchmarkContinuous",
+      "allocations": [
+        "InstantiateDestroy",
+        "Pool"
+      ],
+      "periodicPathUpdates": true,
+      "pathUpdateIntervalSeconds": 0.2,
+      "animatorCulling": "CullUpdateTransforms",
+      "updateWhenOffscreen": false,
+      "skinnedMotionVectors": true
+    },
+    {
+      "name": "Burst-300",
+      "scene": "Level_01",
+      "scenario": "BenchmarkBurst",
+      "allocations": [
+        "InstantiateDestroy",
+        "Pool"
+      ],
+      "periodicPathUpdates": true,
+      "pathUpdateIntervalSeconds": 0.2,
+      "animatorCulling": "CullUpdateTransforms",
+      "updateWhenOffscreen": false,
+      "skinnedMotionVectors": true
+    }
+  ],
+  "unityProfiler": true
+}

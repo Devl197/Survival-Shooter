@@ -173,7 +173,7 @@ BenchmarkSchedule schedule;
             for (int slot = 0; slot < active.Length; slot++) Spawn(slot, schedule.initialPoints[slot]);
             preparation.Stop();
             preparationMilliseconds = (float)preparation.Elapsed.TotalMilliseconds;
-            profilerCapture = BenchmarkProfilerCapture.StartIfRequested();
+            profilerCapture = BenchmarkProfilerCapture.StartIfRequested(scenario.name, selectedAllocation.ToString());
             if (captureWithPresentMon)
             {
                 if (Application.platform != RuntimePlatform.WindowsPlayer)
@@ -183,6 +183,7 @@ BenchmarkSchedule schedule;
                 StartCoroutine(PrepareCapture());
                 return;
             }
+            if (profilerCapture != null) profilerCapture.Begin();
             if (!replay.BeginBenchmark()) throw new InvalidOperationException("Replay could not start; check its file and duration.");
             status = "Running";
             running = true;
@@ -217,6 +218,7 @@ BenchmarkSchedule schedule;
         float elapsed = Mathf.Min(Time.time - replay.StartedAt, duration);
         try
         {
+            if (profilerCapture != null) profilerCapture.Advance();
             while (true)
             {
                 float nextDeath = nextEvent < schedule.replacements.Count ? schedule.replacements[nextEvent].time : float.PositiveInfinity;
@@ -277,9 +279,19 @@ BenchmarkSchedule schedule;
     {
         if (finalizingCapture) return;
         running = false;
+        if (capture != null) capture.MarkEnd(result);
+        try
+        {
+            if (profilerCapture != null) profilerCapture.Stop(result, spawned, removed, poolExpansions);
+        }
+        catch (Exception e)
+        {
+            result = "Failed";
+            Debug.LogError("Profiler finalization failed: " + e.Message, this);
+            if (capture != null) { capture.Run.result = result; capture.Run.error = e.Message; }
+        }
         if (capture != null)
         {
-            capture.MarkEnd(result);
             finalizingCapture = true;
             status = "Finalizing capture";
             StartCoroutine(FinalizeCapture());
@@ -341,6 +353,8 @@ BenchmarkSchedule schedule;
             capture.Run.updateWhenOffscreen = updateWhenOffscreen;
             capture.Run.skinnedMotionVectors = skinnedMotionVectors;
             capture.Run.scenario = scenario.name;
+            capture.Run.unityProfiler = profilerCapture != null;
+            capture.Run.unityProfilerDirectory = profilerCapture != null ? profilerCapture.DirectoryPath : "";
             capture.Run.scenarioConfiguration = JsonUtility.ToJson(scenario);
             capture.Run.allocation = selectedAllocation.ToString();
             capture.Run.replayFile = replay.FilePath;
@@ -407,6 +421,16 @@ BenchmarkSchedule schedule;
         }
         replay.Stopping += ReplayStopping;
         RecordGraphicsSettings(capture.Run);
+        try
+        {
+            if (profilerCapture != null) profilerCapture.Begin();
+        }
+        catch (Exception e)
+        {
+            Debug.LogError("Profiler startup failed: " + e.Message, this);
+            Finish("Failed");
+            yield break;
+        }
         if (!replay.BeginBenchmark()) { Finish("Failed"); yield break; }
         capture.MarkStart();
         status = "Running";
@@ -445,6 +469,7 @@ BenchmarkSchedule schedule;
     {
         if (capture == null || finalizingCapture) return;
         capture.MarkEnd("Stopped");
+        if (profilerCapture != null) profilerCapture.Stop("Stopped", spawned, removed, poolExpansions);
     }
 
     IEnumerator FinalizeCapture()

@@ -22,6 +22,24 @@ public class EnemyHealth : MonoBehaviour
     AudioClip originalClip;
     Vector3 originalParticlePosition;
 
+    // Awake initializes new health; there is no previous life to cancel or reset.
+    public void InitializeFreshSpawn(bool benchmark, EnemySpawner spawner, Action onDied)
+    {
+        using (new EnemyProfilerSample("Enemy.Health.InitializeFresh"))
+        {
+            _onDied = onDied;
+            BenchmarkImmortal = benchmark;
+            owner = spawner;
+            capsuleCollider.isTrigger = false;
+            // Preserve silent spawn even for prefabs with Play On Awake.
+            enemyAudio.Stop();
+            hitParticles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            // Preserve immediate initial pose evaluation, without a redundant Rebind.
+            using (new EnemyProfilerSample("Enemy.Animator.UpdateZero"))
+                anim.Update(0f);
+        }
+    }
+
     public void ResetForSpawn(bool benchmark, EnemySpawner spawner, Action onDied)
     {
         using (new EnemyProfilerSample("Enemy.Health.ResetForSpawn"))

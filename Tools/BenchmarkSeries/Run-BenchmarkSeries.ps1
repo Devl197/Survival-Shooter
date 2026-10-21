@@ -109,7 +109,7 @@ foreach ($group in $settings.groups) {
     if ($group.allocations -isnot [array] -or $group.allocations.Count -eq 0 -or
         @($group.allocations | Select-Object -Unique).Count -ne $group.allocations.Count) { throw 'allocations must be a nonempty array without duplicates.' }
     foreach ($allocation in $group.allocations) {
-        if ($allocation -cnotin @('Pool','InstantiateDestroy')) { throw "Unknown allocation: $allocation" }
+        if ($allocation -cnotin @('Pool','InstantiateDestroy','InstantiateDestroyFresh')) { throw "Unknown allocation: $allocation" }
     }
 }
 # Offset the second allocation stream so both scenario and allocation change.

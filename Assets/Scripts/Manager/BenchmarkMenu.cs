@@ -70,7 +70,7 @@ public class BenchmarkMenu : MonoBehaviour
                 int index = Array.FindIndex(scenarios, s => s != null && s.name == saved.scenario);
                 if (index >= 0) scenarioIndex = index;
             }
-            allocationIndex = Mathf.Clamp(saved.allocation, 0, 1);
+            allocationIndex = Mathf.Clamp(saved.allocation, 0, 2);
             animatorCullingIndex = Mathf.Clamp(saved.culling, 0, CullingModes.Length - 1);
             folder = saved.folder ?? folder;
             resultsFolder = saved.resultsFolder ?? "";
@@ -156,9 +156,9 @@ public class BenchmarkMenu : MonoBehaviour
         useExperimentalScene = request.scene == experimentalScene;
         scenarioIndex = scenarios == null ? -1 : Array.FindIndex(scenarios, s => s != null && s.name == request.scenario);
         if (scenarioIndex < 0) throw new InvalidDataException("Unknown benchmark scenario: " + request.scenario);
-        if (request.allocation != "Pool" && request.allocation != "InstantiateDestroy")
+        if (request.allocation != "Pool" && request.allocation != "InstantiateDestroy" && request.allocation != "InstantiateDestroyFresh")
             throw new InvalidDataException("Unknown allocation: " + request.allocation);
-        allocationIndex = request.allocation == "Pool" ? 1 : 0;
+        allocationIndex = (int)(EnemyAllocation)Enum.Parse(typeof(EnemyAllocation), request.allocation);
         animatorCullingIndex = Array.FindIndex(CullingModes, mode => mode.ToString() == request.animatorCulling);
         if (animatorCullingIndex < 0) throw new InvalidDataException("Unknown animator culling mode.");
         if (!Path.IsPathRooted(request.resultsDirectory ?? ""))
@@ -348,7 +348,7 @@ public class BenchmarkMenu : MonoBehaviour
         }
         GUILayout.Space(10);
         GUILayout.Label("Enemy allocation");
-        allocationIndex = GUILayout.SelectionGrid(allocationIndex, new[] { "Instantiate / Destroy", "Pool" }, 2, GUILayout.Height(34));
+        allocationIndex = GUILayout.SelectionGrid(allocationIndex, new[] { "Instantiate / Destroy (legacy)", "Pool", "Instantiate / Destroy (fresh)" }, 3, GUILayout.Height(34));
         GUILayout.Space(10);
         GUILayout.Label("Animator Culling Mode (benchmark only)");
         animatorCullingIndex = GUILayout.SelectionGrid(animatorCullingIndex, CullingNames, 3, GUILayout.Height(34));

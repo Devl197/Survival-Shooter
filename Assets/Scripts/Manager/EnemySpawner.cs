@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
 
-public enum EnemyAllocation { InstantiateDestroy, Pool }
+public enum EnemyAllocation { InstantiateDestroy = 0, Pool = 1, InstantiateDestroyFresh = 2 }
 
 public class EnemySpawner : MonoBehaviour
 {
@@ -83,8 +83,9 @@ public class EnemySpawner : MonoBehaviour
             }
             entry.kinematic = entry.body.isKinematic;
             entries.Add(entry.health, entry);
-            using (new EnemyProfilerSample("Enemy.Object.Deactivate"))
-                obj.SetActive(false);
+            if (mode != EnemyAllocation.InstantiateDestroyFresh)
+                using (new EnemyProfilerSample("Enemy.Object.Deactivate"))
+                    obj.SetActive(false);
             return entry;
         }
     }
@@ -113,6 +114,19 @@ public class EnemySpawner : MonoBehaviour
             entry.active = true;
             try
             {
+                if (mode == EnemyAllocation.InstantiateDestroyFresh)
+                {
+                    using (new EnemyProfilerSample("Enemy.Spawner.InitializeFresh"))
+                    {
+                        entry.body.velocity = Vector3.zero;
+                        entry.body.angularVelocity = Vector3.zero;
+                        entry.health.InitializeFreshSpawn(benchmark, this, onDied);
+                        if (!entry.agent.isActiveAndEnabled || !entry.agent.isOnNavMesh)
+                            throw new InvalidOperationException("Enemy spawn point is not on NavMesh.");
+                        entry.agent.isStopped = false;
+                    }
+                    return entry.health;
+                }
                 using (new EnemyProfilerSample("Enemy.Navigation.Disable"))
                     entry.agent.enabled = false;
                 using (new EnemyProfilerSample("Enemy.Physics.ResetBody"))

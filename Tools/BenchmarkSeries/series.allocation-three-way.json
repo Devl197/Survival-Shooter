@@ -1,0 +1,109 @@
+{
+  "seriesName": "Allocation-three-variants-30s",
+  "gameExecutable": "Survival Shooter.exe",
+  "presentMonPath": "Tools/PresentMon/PresentMon-2.6.0-x64.exe",
+  "replayPath": "%USERPROFILE%/AppData/LocalLow/DefaultCompany/Survival Shooter/Replays/session.json",
+  "resultsRoot": "E:/Master/Merenja",
+  "repetitions": 6,
+  "pauseSeconds": 10,
+  "timeoutSeconds": 300,
+  "continueOnFailure": true,
+  "graphics": {
+    "width": 1920,
+    "height": 1080,
+    "fullscreen": false,
+    "quality": "Ultra"
+  },
+  "groups": [
+    {
+      "name": "Continuous-50",
+      "scene": "Level_01",
+      "scenario": "BenchmarkContinuous50",
+      "allocations": [
+        "InstantiateDestroy",
+        "InstantiateDestroyFresh",
+        "Pool"
+      ],
+      "periodicPathUpdates": true,
+      "pathUpdateIntervalSeconds": 0.2,
+      "animatorCulling": "CullUpdateTransforms",
+      "updateWhenOffscreen": false,
+      "skinnedMotionVectors": true
+    },
+    {
+      "name": "Burst-50",
+      "scene": "Level_01",
+      "scenario": "BenchmarkBurst50",
+      "allocations": [
+        "InstantiateDestroy",
+        "InstantiateDestroyFresh",
+        "Pool"
+      ],
+      "periodicPathUpdates": true,
+      "pathUpdateIntervalSeconds": 0.2,
+      "animatorCulling": "CullUpdateTransforms",
+      "updateWhenOffscreen": false,
+      "skinnedMotionVectors": true
+    },
+    {
+      "name": "Continuous-100",
+      "scene": "Level_01",
+      "scenario": "BenchmarkContinuous100",
+      "allocations": [
+        "InstantiateDestroy",
+        "InstantiateDestroyFresh",
+        "Pool"
+      ],
+      "periodicPathUpdates": true,
+      "pathUpdateIntervalSeconds": 0.2,
+      "animatorCulling": "CullUpdateTransforms",
+      "updateWhenOffscreen": false,
+      "skinnedMotionVectors": true
+    },
+    {
+      "name": "Burst-100",
+      "scene": "Level_01",
+      "scenario": "BenchmarkBurst100",
+      "allocations": [
+        "InstantiateDestroy",
+        "InstantiateDestroyFresh",
+        "Pool"
+      ],
+      "periodicPathUpdates": true,
+      "pathUpdateIntervalSeconds": 0.2,
+      "animatorCulling": "CullUpdateTransforms",
+      "updateWhenOffscreen": false,
+      "skinnedMotionVectors": true
+    },
+    {
+      "name": "Continuous-300",
+      "scene": "Level_01",
+      "scenario": "BenchmarkContinuous",
+      "allocations": [
+        "InstantiateDestroy",
+        "InstantiateDestroyFresh",
+        "Pool"
+      ],
+      "periodicPathUpdates": true,
+      "pathUpdateIntervalSeconds": 0.2,
+      "animatorCulling": "CullUpdateTransforms",
+      "updateWhenOffscreen": false,
+      "skinnedMotionVectors": true
+    },
+    {
+      "name": "Burst-300",
+      "scene": "Level_01",
+      "scenario": "BenchmarkBurst",
+      "allocations": [
+        "InstantiateDestroy",
+        "InstantiateDestroyFresh",
+        "Pool"
+      ],
+      "periodicPathUpdates": true,
+      "pathUpdateIntervalSeconds": 0.2,
+      "animatorCulling": "CullUpdateTransforms",
+      "updateWhenOffscreen": false,
+      "skinnedMotionVectors": true
+    }
+  ]
+}

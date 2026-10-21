@@ -111,7 +111,7 @@ BenchmarkSchedule schedule;
             originalTargetFrameRate = Application.targetFrameRate;
             ownsFrameSettings = true;
             QualitySettings.vSyncCount = 0;
-            Application.targetFrameRate = -1;
+            Application.targetFrameRate = BenchmarkProfilerCapture.Requested ? BenchmarkProfilerCapture.TargetFrameRate : -1;
             Debug.Log("Benchmark frame settings: scene=" + UnityEngine.SceneManagement.SceneManager.GetActiveScene().name +
                 ", quality=" + QualitySettings.names[QualitySettings.GetQualityLevel()] +
                 ", vSyncCount=" + QualitySettings.vSyncCount +
@@ -173,6 +173,8 @@ BenchmarkSchedule schedule;
             for (int slot = 0; slot < active.Length; slot++) Spawn(slot, schedule.initialPoints[slot]);
             preparation.Stop();
             preparationMilliseconds = (float)preparation.Elapsed.TotalMilliseconds;
+            if (BenchmarkProfilerCapture.Requested && captureWithPresentMon)
+                throw new InvalidOperationException("Profiler diagnostics must run without simultaneous PresentMon capture.");
             profilerCapture = BenchmarkProfilerCapture.StartIfRequested(scenario.name, selectedAllocation.ToString());
             if (captureWithPresentMon)
             {
@@ -207,7 +209,8 @@ BenchmarkSchedule schedule;
             Finish("Invalid: graphics settings changed");
             return;
         }
-        if (running && capture != null && (Time.timeScale != 1f || !Application.isFocused || capture.Exited))
+        if (running && (capture != null || profilerCapture != null) &&
+            (Time.timeScale != 1f || !Application.isFocused || (capture != null && capture.Exited)))
         {
 
             Finish("Invalid: pause, focus loss or capture exit");

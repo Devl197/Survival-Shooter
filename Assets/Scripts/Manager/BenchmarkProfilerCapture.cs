@@ -9,6 +9,8 @@ using UnityEngine.Profiling;
 internal sealed class BenchmarkProfilerCapture : IDisposable
 {
     const int FramesPerSegment = 200;
+    public const int TargetFrameRate = 60;
+    const int BufferBytes = 128 * 1024 * 1024;
     const int MaxSegments = 1024;
     [Serializable]
     sealed class Segment
@@ -23,6 +25,9 @@ internal sealed class BenchmarkProfilerCapture : IDisposable
     {
         public string result = "Incomplete";
         public int framesPerSegment = FramesPerSegment;
+        public int targetFrameRate = TargetFrameRate;
+        public int bufferBytes = BufferBytes;
+        public bool captureWithPresentMon;
         public string unityVersion, scenario, allocation;
         public int spawned, removed, poolExpansions;
         public List<Segment> segments = new List<Segment>(MaxSegments);
@@ -30,6 +35,7 @@ internal sealed class BenchmarkProfilerCapture : IDisposable
     readonly bool previousEnabled;
     readonly bool previousBinaryLog;
     readonly string previousLogFile;
+    readonly int previousMaxUsedMemory;
     readonly string directory;
     readonly Manifest manifest;
     readonly Segment[] preparedSegments = new Segment[MaxSegments];
@@ -38,6 +44,7 @@ internal sealed class BenchmarkProfilerCapture : IDisposable
     bool recording, stopped;
     bool disposed;
     public string DirectoryPath { get { return directory; } }
+    public static bool Requested { get { return Array.IndexOf(Environment.GetCommandLineArgs(), "--benchmark-profiler-log") >= 0; } }
 
     public static BenchmarkProfilerCapture StartIfRequested(string scenario, string allocation)
     {
@@ -58,11 +65,14 @@ internal sealed class BenchmarkProfilerCapture : IDisposable
         previousEnabled = Profiler.enabled;
         previousBinaryLog = Profiler.enableBinaryLog;
         previousLogFile = Profiler.logFile;
+        previousMaxUsedMemory = Profiler.maxUsedMemory;
         if (previousEnabled || previousBinaryLog)
             throw new InvalidOperationException("Disable Autoconnect Profiler and other Profiler recording before this series.");
         directory = path;
         Directory.CreateDirectory(directory);
-        manifest = new Manifest { unityVersion = Application.unityVersion, scenario = scenario, allocation = allocation };
+        manifest = new Manifest { unityVersion = Application.unityVersion, scenario = scenario,
+            allocation = allocation, captureWithPresentMon = false };
+        manifest.targetFrameRate = Application.targetFrameRate;
         // Allocate bookkeeping before capture rather than adding GC.Alloc noise at every rotation.
         for (int i = 0; i < preparedSegments.Length; i++)
         {
@@ -76,6 +86,7 @@ internal sealed class BenchmarkProfilerCapture : IDisposable
     {
         if (recording || stopped) throw new InvalidOperationException("Profiler recording has already started or stopped.");
         startedAt = Time.realtimeSinceStartup;
+        Profiler.maxUsedMemory = BufferBytes;
         recording = true;
         OpenSegment();
     }
@@ -103,10 +114,12 @@ internal sealed class BenchmarkProfilerCapture : IDisposable
 
     void CloseSegment()
     {
-        Profiler.enabled = false;
-        Profiler.enableBinaryLog = false;
         segment.endFrame = Time.frameCount;
         segment.endSeconds = Time.realtimeSinceStartup - startedAt;
+        Profiler.enabled = false;
+        Profiler.enableBinaryLog = false;
+        // Explicitly close/flush the native file before writing the manifest or quitting.
+        Profiler.logFile = "";
     }
 
     public void Stop(string result, int spawned, int removed, int poolExpansions)
@@ -124,7 +137,11 @@ internal sealed class BenchmarkProfilerCapture : IDisposable
 
     void SaveManifest()
     {
-        File.WriteAllText(Path.Combine(directory, "profiler.json"), JsonUtility.ToJson(manifest, true));
+        string path = Path.Combine(directory, "profiler.json");
+        string temporary = path + ".tmp";
+        File.WriteAllText(temporary, JsonUtility.ToJson(manifest, true));
+        if (File.Exists(path)) File.Replace(temporary, path, null);
+        else File.Move(temporary, path);
     }
 
     public void Dispose()
@@ -137,6 +154,7 @@ internal sealed class BenchmarkProfilerCapture : IDisposable
             Profiler.enabled = false;
             Profiler.enableBinaryLog = false;
             Profiler.logFile = previousLogFile;
+            Profiler.maxUsedMemory = previousMaxUsedMemory;
             Profiler.enableBinaryLog = previousBinaryLog;
             Profiler.enabled = previousEnabled;
         }

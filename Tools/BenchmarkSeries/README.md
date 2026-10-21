@@ -46,7 +46,7 @@ Za ovu proveru i nove metapodatke potreban je **novi build igre**. Launcher i da
 | Polje serije | Značenje |
 | --- | --- |
 | `seriesName` | Prefiks novog foldera serije. Skripta dodaje UTC vreme i jedinstveni ID. |
-| `resultsRoot` | Glavni izlazni folder. Primer koristi postojeći `Benchmarks` folder igre. |
+| `resultsRoot` | Glavni izlazni folder. Gotove konfiguracije `series.pool-30s.json` i `series.profiler-300.json` koriste `E:/Master/Merenja`; opšti primer koristi `Benchmarks` folder igre. |
 | `gameExecutable` | Putanja do novog Windows build-a igre. |
 | `presentMonPath` | Putanja do originalnog PresentMon 2.6.0 izvršnog fajla; proverava se SHA-256. |
 | `replayPath` | Zajednički replay za sve testove. Čita se i ne prepisuje. |
@@ -56,7 +56,7 @@ Za ovu proveru i nove metapodatke potreban je **novi build igre**. Launcher i da
 | `continueOnFailure` | `true`: zabeleži grešku i pređi na sledeći test; `false`: prekini seriju posle prve greške. |
 | `groups` | Redom navedene grupe eksperimenata. |
 | `graphics` | Zajednička rezolucija, fullscreen i naziv kvaliteta; važe za svako merenje. |
-| `unityProfiler` | Opciono, podrazumevano `false`. `true` uključuje segmentisani Unity Profiler za Continuous 300/Burst 300, uz replay od 30 s i Development Build. |
+| `unityProfiler` | Opciono, podrazumevano `false`. `true` uključuje samo Unity Profiler na 60 FPS, bez PresentMon-a, za Continuous 300/Burst 300 uz replay od 30 s i Development Build. |
 
 | Polje grupe | Značenje |
 | --- | --- |
@@ -94,6 +94,20 @@ Režim koji je prvi u nizu `allocations` započinje svako ponavljanje. Više se 
 Za manje od četiri grupe ili različite nizove `allocations`, skripta zadržava jednostavniji raspored: ciklična rotacija grupa između ponavljanja, svi režimi jedne grupe uzastopno i promena početnog režima po ponavljanju. Stroga promena oba faktora nije garantovana za te konfiguracije; sa jednom grupom nije ni moguća. Sa četiri ili više grupa koje imaju isti niz od dva režima, drugi tok je pomeren za `max(3, floor(brojGrupa / 2))` grupa. Pun ciklus pozicija po režimu traje onoliko ponavljanja koliko ima grupa.
 
 Raspored važi i za poređenja drugih scena, grafičkih i AI podešavanja: pomeraju se cele grupe bez promene njihovih podešavanja. Rotacija uravnotežuje pozicije, ali ne uklanja uticaj temperature i drugih procesa i ne uravnotežuje sve moguće prethodne scenarije. `-ValidateOnly` prikazuje tačan plan izvršavanja.
+
+## Lokacija rezultata i oslobađanje prostora
+
+Za postojeće Unity Profiler snimke dostupan je **Tools → Benchmark → Export Profiler recordings to CSV** u Unity Editor-u. Daje zbirnu tabelu i CSV za Spawn/Despawn, alokacije i GC bez novog build-a ili ponovnog snimanja. Postupak i tumačenje rezultata su u [Profiler uputstvu](PROFILER.md#automatski-izvoz-postojećih-snimaka-u-csv-i-zbirnu-tabelu).
+
+U obe gotove konfiguracije novi rezultati idu u `E:/Master/Merenja`. Svako pokretanje pravi zaseban folder sa nazivom serije, vremenom i jedinstvenim ID-em. Tu se čuvaju CSV rezultati, Profiler `.raw` segmenti, manifesti i `_automation` izveštaji i player logovi. Za drugi disk ili folder promeni samo `resultsRoot` u konfiguraciji koju pokrećeš, na primer:
+
+```json
+"resultsRoot": "D:/BenchmarkRezultati"
+```
+
+Možeš koristiti i `"resultsRoot": "BenchmarkRezultati"`: putanja je tada relativna prema konfiguracionom fajlu, pa rezultati idu pored konfiguracije i build-a. Folder se automatski pravi pri pokretanju serije; potrebni su dozvola upisa i dovoljno slobodnog prostora. `-ValidateOnly` prikazuje razrešenu lokaciju, ali ne proverava upis ni slobodan prostor. Za promenu izlazne putanje nije potreban novi build. Kopiraj izmenjeni JSON pored izvršnog fajla; postojeći rezultati se ne premeštaju.
+
+Kada igra i serija nisu pokrenute, možeš obrisati sadržaj `%USERPROFILE%/AppData/LocalLow/DefaultCompany/Survival Shooter/Benchmarks` ako ti stara merenja više nisu potrebna. Prethodno sačuvaj uspešne serije koje želiš da koristiš u analizi: ponavljanje testova ne vraća njihove originalne podatke. Nemoj obrisati susedni folder `Replays`: glavna konfiguracija odatle čita `session.json`. Profiler konfiguracija čita `session.json` pored build-a. Pre brisanja proveri da tvoj `replayPath` ne pokazuje unutar foldera koji brišeš. Ručno pokretanje kroz meni i dalje koristi svoju postojeću izlaznu putanju; `resultsRoot` se odnosi na automatizovanu seriju.
 
 ## Upareni Continuous i Burst scenariji
 
@@ -158,7 +172,7 @@ Pri isteku vremena skripta zatvara samo instancu igre koju je sama pokrenula. Pr
 
 ## Provera implementacije
 
-Za dodatnu dijagnostičku seriju **Continuous 300 i Burst 300, oba režima, po šest ponavljanja (24 snimanja)** koristi `series.profiler-300.json`. Priprema build-a, komande, lokacija segmenata, pregled GC.Alloc/GC.Collect/Spawn/Despawn i rešenje ograničenja od 300 frejmova opisani su u [PROFILER.md](PROFILER.md). Glavna Release serija ostaje odvojena.
+Za dodatnu dijagnostičku seriju **Continuous 300 i Burst 300, oba režima, po jedno ponavljanje (četiri snimanja)** koristi `series.profiler-300.json`. Snima se samo Unity Profiler na 60 FPS, bez paralelnog PresentMon-a. Priprema build-a, komande, lokacija segmenata, pregled metrika i rešenje ograničenja od 300 frejmova opisani su u [PROFILER.md](PROFILER.md). Glavna Release/PresentMon serija ostaje odvojena.
 
 ```powershell
 .\Tools\BenchmarkSeries\tests\Test-Series.ps1

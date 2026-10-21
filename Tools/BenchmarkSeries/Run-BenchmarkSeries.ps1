@@ -67,7 +67,9 @@ $game = Resolve-ConfigPath $settings.gameExecutable
 $presentMon = Resolve-ConfigPath $settings.presentMonPath
 $replay = Resolve-ConfigPath $settings.replayPath
 $resultsRoot = Resolve-ConfigPath $settings.resultsRoot
-foreach ($file in @($game, $presentMon, $replay)) {
+$requiredFiles = @($game, $replay)
+if (!$unityProfiler) { $requiredFiles += $presentMon }
+foreach ($file in $requiredFiles) {
     if (!(Test-Path -LiteralPath $file -PathType Leaf)) { throw "File not found: $file" }
     if ($file.Contains('"')) { throw "Unsupported quote in path: $file" }
 }
@@ -76,7 +78,7 @@ Assert-Number $replayData.duration 0.001 86400 $false 'replay.duration'
 if ($unityProfiler -and [math]::Abs($replayData.duration - 30) -gt 0.0001) {
     throw 'The diagnostic Profiler series requires a 30-second replay.'
 }
-if ((Get-FileHash -LiteralPath $presentMon -Algorithm SHA256).Hash -ne
+if (!$unityProfiler -and (Get-FileHash -LiteralPath $presentMon -Algorithm SHA256).Hash -ne
     'B2A706BC6AD475749E3B7E3409263AA1E6906D45BDCF993F6DBC0F660188F1AF') {
     throw 'PresentMon must be the pinned 2.6.0 executable.'
 }
@@ -137,6 +139,7 @@ for ($repeat = 0; $repeat -lt $settings.repetitions; $repeat++) {
 $plan | Select-Object @{n='Group';e={$_.group.name}}, repetition, allocation | Format-Table | Out-Host
 Write-Host ("Planned runs: {0}; results root: {1}" -f $plan.Count, $resultsRoot)
 Write-Host ("Unity Profiler segmented recording: {0}" -f $unityProfiler)
+if ($unityProfiler) { Write-Host 'Diagnostic mode: Unity Profiler only, 60 FPS, no PresentMon process.' }
 Write-Host ('Graphics for every run: {0}x{1}; fullscreen={2}; quality={3}' -f $settings.graphics.width,
     $settings.graphics.height, $settings.graphics.fullscreen, $settings.graphics.quality)
 if ($ValidateOnly) { return }
@@ -164,6 +167,7 @@ try {
             periodicPathUpdates = $group.periodicPathUpdates; pathUpdateIntervalSeconds = $group.pathUpdateIntervalSeconds
             animatorCulling = $group.animatorCulling; updateWhenOffscreen = $group.updateWhenOffscreen
             skinnedMotionVectors = $group.skinnedMotionVectors; graphics = $settings.graphics }
+        $request.captureWithPresentMon = !$unityProfiler
         Write-Json $request $requestPath
         $row = [pscustomobject][ordered]@{ run = $runId; group = $group.name; scene = $group.scene
             scenario = $group.scenario; allocation = $item.allocation; repetition = $item.repetition
@@ -199,47 +203,56 @@ try {
             $row.result = $report.result
             $row.captureDirectory = $report.captureDirectory
             if ($report.result -ne 'Completed' -or $process.ExitCode -ne 0) { throw "Game result: $($report.result). $($report.error)" }
-            $capturePath = [IO.Path]::GetFullPath($report.captureDirectory)
-            if (!(Split-Path -Parent $capturePath).Equals($groupDirectory, [StringComparison]::OrdinalIgnoreCase)) {
-                throw 'Capture directory is outside its configured group.'
-            }
-            $metadata = Get-Content -LiteralPath (Join-Path $capturePath 'session.json') -Raw | ConvertFrom-Json
-            foreach ($field in @('screenWidth','screenHeight','fullscreen','qualityLevel')) {
-                if ($null -eq $metadata.PSObject.Properties[$field]) {
-                    throw 'Capture is missing graphics metadata. Rebuild the game with graphics configuration support.'
+            if (!$unityProfiler) {
+                $capturePath = [IO.Path]::GetFullPath($report.captureDirectory)
+                if (!(Split-Path -Parent $capturePath).Equals($groupDirectory, [StringComparison]::OrdinalIgnoreCase)) {
+                    throw 'Capture directory is outside its configured group.'
                 }
+                $metadata = Get-Content -LiteralPath (Join-Path $capturePath 'session.json') -Raw | ConvertFrom-Json
+                foreach ($field in @('screenWidth','screenHeight','fullscreen','qualityLevel')) {
+                    if ($null -eq $metadata.PSObject.Properties[$field]) {
+                        throw 'Capture is missing graphics metadata. Rebuild the game with graphics configuration support.'
+                    }
+                }
+                if ($metadata.result -ne 'Completed' -or $metadata.filteredFrames -le 0 -or
+                    $metadata.scene -ne $request.scene -or $metadata.scenario -ne $request.scenario -or
+                    $metadata.allocation -ne $request.allocation -or $metadata.processId -ne $process.Id -or
+                    $metadata.replayFile -ne $request.replayPath -or !$metadata.enemyCullingOverridden -or
+                    $metadata.animatorCullingMode -ne $request.animatorCulling -or
+                    $metadata.periodicPathUpdates -ne $request.periodicPathUpdates -or
+                    [math]::Abs($metadata.pathUpdateIntervalSeconds - $request.pathUpdateIntervalSeconds) -gt 0.00001 -or
+                    $metadata.updateWhenOffscreen -ne $request.updateWhenOffscreen -or
+                    $metadata.skinnedMotionVectors -ne $request.skinnedMotionVectors -or
+                    $metadata.screenWidth -ne $settings.graphics.width -or $metadata.screenHeight -ne $settings.graphics.height -or
+                    $metadata.fullscreen -ne $settings.graphics.fullscreen -or $metadata.qualityLevel -cne $settings.graphics.quality) {
+                    throw 'Capture metadata is invalid or does not match the request.'
+                }
+                $measured = Join-Path $capturePath 'measured.csv'
+                $frames = 0
+                Import-Csv -LiteralPath $measured | ForEach-Object {
+                    $frameTime = [double]::Parse($_.FrameTime, [Globalization.CultureInfo]::InvariantCulture)
+                    if ([double]::IsNaN($frameTime) -or [double]::IsInfinity($frameTime) -or $frameTime -le 0) { throw 'Invalid measured FrameTime.' }
+                    $frames++
+                }
+                if ($frames -ne $metadata.filteredFrames) { throw 'Measured frame count does not match session.json.' }
             }
-            if ($metadata.result -ne 'Completed' -or $metadata.filteredFrames -le 0 -or
-                $metadata.scene -ne $request.scene -or $metadata.scenario -ne $request.scenario -or
-                $metadata.allocation -ne $request.allocation -or $metadata.processId -ne $process.Id -or
-                $metadata.replayFile -ne $request.replayPath -or !$metadata.enemyCullingOverridden -or
-                $metadata.animatorCullingMode -ne $request.animatorCulling -or
-                $metadata.periodicPathUpdates -ne $request.periodicPathUpdates -or
-                [math]::Abs($metadata.pathUpdateIntervalSeconds - $request.pathUpdateIntervalSeconds) -gt 0.00001 -or
-                $metadata.updateWhenOffscreen -ne $request.updateWhenOffscreen -or
-                $metadata.skinnedMotionVectors -ne $request.skinnedMotionVectors -or
-                $metadata.screenWidth -ne $settings.graphics.width -or $metadata.screenHeight -ne $settings.graphics.height -or
-                $metadata.fullscreen -ne $settings.graphics.fullscreen -or $metadata.qualityLevel -cne $settings.graphics.quality) {
-                throw 'Capture metadata is invalid or does not match the request.'
-            }
-            $measured = Join-Path $capturePath 'measured.csv'
-            $frames = 0
-            Import-Csv -LiteralPath $measured | ForEach-Object {
-                $frameTime = [double]::Parse($_.FrameTime, [Globalization.CultureInfo]::InvariantCulture)
-                if ([double]::IsNaN($frameTime) -or [double]::IsInfinity($frameTime) -or $frameTime -le 0) { throw 'Invalid measured FrameTime.' }
-                $frames++
-            }
-            if ($frames -ne $metadata.filteredFrames) { throw 'Measured frame count does not match session.json.' }
             if ($unityProfiler) {
-                if ($null -eq $metadata.PSObject.Properties['unityProfiler'] -or !$metadata.unityProfiler) {
-                    throw 'Capture does not confirm Unity Profiler recording. Rebuild the game.'
+                if (![string]::IsNullOrEmpty($report.captureDirectory)) {
+                    throw 'Diagnostic build unexpectedly started PresentMon. Rebuild with Profiler-only support.'
+                }
+                if (Select-String -LiteralPath $logPath -Pattern 'Skipping profile frame|Receiver can not keep up' -Quiet) {
+                    throw 'Unity dropped Profiler frames. This capture is incomplete; inspect the player log.'
                 }
                 $profile = Get-Content -LiteralPath (Join-Path $profilerDirectory 'profiler.json') -Raw | ConvertFrom-Json
                 if ($profile.result -ne 'Completed' -or $profile.scenario -ne $request.scenario -or
                     $profile.allocation -ne $request.allocation -or @($profile.segments).Count -eq 0 -or
                     $profile.framesPerSegment -ne 200 -or $profile.removed -ne 120 -or $profile.spawned -ne 420 -or
-                    $profile.poolExpansions -ne 0) {
+                    $profile.poolExpansions -ne 0 -or $profile.targetFrameRate -ne 60 -or
+                    $profile.bufferBytes -ne 134217728 -or $profile.captureWithPresentMon) {
                     throw 'Profiler capture is incomplete or does not match the diagnostic scenario.'
+                }
+                if ($profile.segments[-1].endSeconds -gt 32) {
+                    throw 'Profiler capture exceeded 32 wall-clock seconds for a 30-second replay. Recording stalled.'
                 }
                 foreach ($segment in $profile.segments) {
                     if ([IO.Path]::GetFileName($segment.file) -cne $segment.file -or $segment.file -notmatch '^segment-\d{4,}\.raw$') {

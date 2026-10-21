@@ -12,6 +12,11 @@ class FakeGame
         var json = new JavaScriptSerializer();
         int index = Array.IndexOf(args, "--benchmark-request");
         var request = json.Deserialize<Dictionary<string, object>>(File.ReadAllText(args[index + 1]));
+        bool profilerOnly = Array.IndexOf(args, "--benchmark-profiler-log") >= 0;
+        if (profilerOnly && (bool)request["captureWithPresentMon"])
+            throw new Exception("Profiler diagnostics must not launch PresentMon.");
+        string logPath = args[Array.IndexOf(args, "-logFile") + 1];
+        File.WriteAllText(logPath, "Fake game started.\n");
         var graphics = (Dictionary<string, object>)request["graphics"];
         foreach (string option in new[] { "-screen-width", "-screen-height", "-screen-fullscreen", "-screen-quality" })
         {
@@ -26,6 +31,8 @@ class FakeGame
         if (mode == "timeout") { Thread.Sleep(10000); return 1; }
         if (mode == "missing") return 0;
         string directory = Path.Combine((string)request["resultsDirectory"], Guid.NewGuid().ToString("N"));
+        if (!profilerOnly)
+        {
         Directory.CreateDirectory(directory);
         File.WriteAllText(Path.Combine(directory, "measured.csv"), mode == "bad-frame" ? "FrameTime\nNaN\n20\n" : "FrameTime\n10\n20\n");
         File.WriteAllText(Path.Combine(directory, "session.json"), json.Serialize(new {
@@ -41,6 +48,7 @@ class FakeGame
             pathUpdateIntervalSeconds = request["pathUpdateIntervalSeconds"],
             updateWhenOffscreen = request["updateWhenOffscreen"], skinnedMotionVectors = request["skinnedMotionVectors"]
         }));
+        }
         if (Array.IndexOf(args, "--benchmark-profiler-log") >= 0 && mode != "missing-profiler")
         {
             int profilerArgument = Array.IndexOf(args, "--benchmark-profiler-directory");
@@ -53,13 +61,14 @@ class FakeGame
             File.WriteAllText(Path.Combine(profilerDirectory, "profiler.json"), json.Serialize(new {
                 result = "Completed", scenario = request["scenario"], allocation = request["allocation"],
                 framesPerSegment = 200, spawned = 420, removed = mode == "bad-profiler-counters" ? 119 : 120,
-                poolExpansions = 0,
+                poolExpansions = 0, targetFrameRate = 60, bufferBytes = 134217728, captureWithPresentMon = false,
                 segments = new[] { new { file = "segment-0001.raw", startFrame = 10,
-                    endFrame = mode == "oversized-profiler" ? 211 : 210, startSeconds = 0, endSeconds = 30 } }
+                    endFrame = mode == "oversized-profiler" ? 211 : 210, startSeconds = 0, endSeconds = mode == "stalled-profiler" ? 45 : 30 } }
             }));
+            if (mode == "dropped-profiler") File.AppendAllText(logPath, "Skipping profile frame. Receiver can not keep up with the amount of data sent\n");
         }
         File.WriteAllText((string)request["reportPath"], json.Serialize(new {
-            result = mode == "failed" ? "CaptureFailed" : "Completed", error = "", captureDirectory = directory
+            result = mode == "failed" ? "CaptureFailed" : "Completed", error = "", captureDirectory = profilerOnly ? null : directory
         }));
         return mode == "failed" ? 1 : 0;
     }

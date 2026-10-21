@@ -170,7 +170,7 @@ public class BenchmarkMenu : MonoBehaviour
         pathUpdateInterval = request.pathUpdateIntervalSeconds.ToString("R", CultureInfo.InvariantCulture);
         updateWhenOffscreen = request.updateWhenOffscreen;
         skinnedMotionVectors = request.skinnedMotionVectors;
-        capture = true;
+        capture = request.captureWithPresentMon;
     }
 
     string automatedResultsDirectory;

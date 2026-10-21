@@ -20,6 +20,7 @@ public static class BenchmarkAutomation
         public string animatorCulling = "CullUpdateTransforms";
         public bool periodicPathUpdates, updateWhenOffscreen;
         public bool skinnedMotionVectors = true;
+        public bool captureWithPresentMon = true;
         public float pathUpdateIntervalSeconds = 0.2f;
         public GraphicsSettings graphics;
     }

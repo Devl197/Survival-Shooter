@@ -8,7 +8,7 @@ using System.Web.Script.Serialization;
 namespace UnityEngine
 {
     public static class Time { public static int frameCount; public static float realtimeSinceStartup; }
-    public static class Application { public static string unityVersion = "2018.3-test"; }
+    public static class Application { public static string unityVersion = "2018.3-test"; public static int targetFrameRate = 60; }
     public static class JsonUtility
     {
         public static string ToJson(object value, bool pretty) { return new JavaScriptSerializer().Serialize(value); }
@@ -19,6 +19,7 @@ namespace UnityEngine.Profiling
     public static class Profiler
     {
         public static bool enabled;
+        public static int maxUsedMemory = 16 * 1024 * 1024;
         public static string logFile = "original";
         static bool binaryLog;
         public static bool enableBinaryLog
@@ -54,6 +55,7 @@ class ProfilerCaptureTests
         {
             Check(!UnityEngine.Profiling.Profiler.enabled, "Preparation must not be recorded.");
             capture.Begin();
+            Check(UnityEngine.Profiling.Profiler.maxUsedMemory == 128 * 1024 * 1024, "Profiler buffer was not configured.");
             for (int frame = 101; frame <= 701; frame++)
             {
                 UnityEngine.Time.frameCount = frame;
@@ -64,7 +66,7 @@ class ProfilerCaptureTests
             capture.Stop("Aborted", 0, 0, 0);
         }
         Check(!UnityEngine.Profiling.Profiler.enabled && !UnityEngine.Profiling.Profiler.enableBinaryLog &&
-            UnityEngine.Profiling.Profiler.logFile == "original", "Profiler state was not restored.");
+            UnityEngine.Profiling.Profiler.logFile == "original" && UnityEngine.Profiling.Profiler.maxUsedMemory == 16 * 1024 * 1024, "Profiler state was not restored.");
         var manifest = new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(File.ReadAllText(Path.Combine(directory, "profiler.json")));
         Check((string)manifest["result"] == "Completed" && (int)manifest["removed"] == 120, "Completion must not be overwritten on disposal.");
         var segments = (ArrayList)manifest["segments"];

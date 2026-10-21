@@ -147,10 +147,10 @@ Check $caught 'Unknown graphics quality was accepted.'
     @{duration=30;testMode='success'} | ConvertTo-Json | Set-Content -LiteralPath $settings.replayPath -Encoding UTF8
     Save-Config
     . $runner -Config $configPath -ValidateOnly
-    Check ($plan.Count -eq 24) 'Expected 24 diagnostic runs.'
+    Check ($plan.Count -eq 4) 'Expected four diagnostic runs by default.'
     foreach ($group in $settings.groups) {
         foreach ($allocation in @('Pool','InstantiateDestroy')) {
-            Check (@($plan | Where-Object { $_.group.name -eq $group.name -and $_.allocation -eq $allocation }).Count -eq 6) 'Diagnostic conditions are not repeated six times.'
+            Check (@($plan | Where-Object { $_.group.name -eq $group.name -and $_.allocation -eq $allocation }).Count -eq 1) 'Each diagnostic condition must run once by default.'
         }
     }
     $settings.repetitions = 1
@@ -161,8 +161,9 @@ Check $caught 'Unknown graphics quality was accepted.'
     Check ($resultRows.Count -eq 4) 'Expected four diagnostic runs in orchestration test.'
     Check (@($resultRows | Where-Object result -ne 'Completed').Count -eq 0) 'Diagnostic orchestration failed.'
     Check (@($resultRows | Where-Object { !(Test-Path (Join-Path $_.profilerDirectory 'profiler.json')) }).Count -eq 0) 'Profiler paths not retained in summary.'
+    Check (@($resultRows | Where-Object { ![string]::IsNullOrEmpty($_.captureDirectory) }).Count -eq 0) 'Profiler diagnostics must not record a PresentMon capture.'
     $settings.continueOnFailure = $false
-    foreach ($mode in @('missing-profiler','empty-profiler','oversized-profiler','bad-profiler-counters')) {
+    foreach ($mode in @('missing-profiler','empty-profiler','oversized-profiler','bad-profiler-counters','dropped-profiler','stalled-profiler')) {
         @{duration=30;testMode=$mode} | ConvertTo-Json | Set-Content -LiteralPath $settings.replayPath -Encoding UTF8
         Save-Config
         $caught = $false

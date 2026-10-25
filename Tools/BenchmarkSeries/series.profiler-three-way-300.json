@@ -1,0 +1,50 @@
+{
+  "seriesName": "GC-Spawn-three-variants-300-30s",
+  "gameExecutable": "E:/Master/Unity/ProfilerSurvivalBuild/Survival Shooter.exe",
+  "presentMonPath": "Tools/PresentMon/PresentMon-2.6.0-x64.exe",
+  "replayPath": "%USERPROFILE%/AppData/LocalLow/DefaultCompany/Survival Shooter/Replays/session.json",
+  "resultsRoot": "E:/Master/Merenja",
+  "repetitions": 3,
+  "pauseSeconds": 10,
+  "timeoutSeconds": 600,
+  "continueOnFailure": true,
+  "graphics": {
+    "width": 1920,
+    "height": 1080,
+    "fullscreen": false,
+    "quality": "Ultra"
+  },
+  "groups": [
+    {
+      "name": "Continuous-300",
+      "scene": "Level_01",
+      "scenario": "BenchmarkContinuous",
+      "allocations": [
+        "InstantiateDestroy",
+        "InstantiateDestroyFresh",
+        "Pool"
+      ],
+      "periodicPathUpdates": true,
+      "pathUpdateIntervalSeconds": 0.2,
+      "animatorCulling": "CullUpdateTransforms",
+      "updateWhenOffscreen": false,
+      "skinnedMotionVectors": true
+    },
+    {
+      "name": "Burst-300",
+      "scene": "Level_01",
+      "scenario": "BenchmarkBurst",
+      "allocations": [
+        "InstantiateDestroy",
+        "InstantiateDestroyFresh",
+        "Pool"
+      ],
+      "periodicPathUpdates": true,
+      "pathUpdateIntervalSeconds": 0.2,
+      "animatorCulling": "CullUpdateTransforms",
+      "updateWhenOffscreen": false,
+      "skinnedMotionVectors": true
+    }
+  ],
+  "unityProfiler": true
+}

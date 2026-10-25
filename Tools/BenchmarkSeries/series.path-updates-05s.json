@@ -1,0 +1,42 @@
+{
+  "seriesName": "Path-updates-05s-InstantiateDestroy",
+  "gameExecutable": "E:/Master/Unity/SurvivalBuild/Survival Shooter.exe",
+  "presentMonPath": "E:/Master/Unity/SurvivalBuild/Tools/PresentMon/PresentMon-2.6.0-x64.exe",
+  "replayPath": "%USERPROFILE%/AppData/LocalLow/DefaultCompany/Survival Shooter/Replays/session.json",
+  "resultsRoot": "E:/Master/Merenja",
+  "repetitions": 3,
+  "pauseSeconds": 10,
+  "timeoutSeconds": 300,
+  "continueOnFailure": false,
+  "unityProfiler": false,
+  "graphics": {
+    "width": 1920,
+    "height": 1080,
+    "fullscreen": false,
+    "quality": "Ultra"
+  },
+  "groups": [
+    {
+      "name": "Path-every-frame",
+      "scene": "Level_01",
+      "scenario": "BenchmarkGrouped",
+      "allocations": ["InstantiateDestroy"],
+      "periodicPathUpdates": false,
+      "pathUpdateIntervalSeconds": 0.5,
+      "animatorCulling": "CullUpdateTransforms",
+      "updateWhenOffscreen": false,
+      "skinnedMotionVectors": true
+    },
+    {
+      "name": "Path-periodic-05s",
+      "scene": "Level_01",
+      "scenario": "BenchmarkGrouped",
+      "allocations": ["InstantiateDestroy"],
+      "periodicPathUpdates": true,
+      "pathUpdateIntervalSeconds": 0.5,
+      "animatorCulling": "CullUpdateTransforms",
+      "updateWhenOffscreen": false,
+      "skinnedMotionVectors": true
+    }
+  ]
+}

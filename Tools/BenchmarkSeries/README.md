@@ -22,7 +22,111 @@ Zahteva Windows PowerShell 5.1 ili PowerShell 7 i postojeći PresentMon 2.6.0 iz
 
 Igra mora biti vidljiva i u fokusu tokom merenja. Ne koristi računar za druge poslove tokom serije: promena fokusa ili pauziranje poništavaju merenje. Automatizacija ne koristi headless/batchmode režim i ne simulira klikove po meniju. Podešavanja se prosleđuju direktno, bez menjanja sačuvanih izbora u meniju.
 
+## Ponavljanje culling serije: 15 merenja
+
+`series.culling-15.json` koristi postojeći build u `E:/Master/Unity/SurvivalBuild`
+i menja samo Animator režim: `AlwaysAnimate`, `CullUpdateTransforms` i
+`CullCompletely`, po pet ponavljanja. Postojeća skripta rotira početnu grupu
+između ponavljanja. Rezultati idu u novi folder
+`E:/Master/Merenja/Culling-Grouped-300-Pool-15-<UTC vreme>-<ID>`.
+
+Uslovi odgovaraju sačuvanim parametrima početne A/B/C serije od 18. oktobra 2026:
+`BenchmarkGrouped`, 300 neprijatelja, `Pool`, periodični AI zahtevi na 0,5 s,
+`updateWhenOffscreen=false`, `skinnedMotionVectors=true`, seed 12345.
+Aktuelni scenario asset zadržava grupu 60, interval zamene 1 s, početni lifetime
+5 s, death duration 2 s i težine tipova `[1,1,1]`. Ove vrednosti dolaze iz
+scenario asseta ugrađenog u build, a ne iz JSON konfiguracije.
+Benchmark isključuje VSync i FPS limit. Unity Profiler je isključen.
+
+Konfiguracija bira `Level_01`, 1920×1080, prozor i Ultra. Početni stari izveštaji
+nemaju naziv scene ni grafička podešavanja, pa su ovo eksplicitno izabrani uslovi
+novog poređenja, a ne potvrđene istorijske vrednosti.
+
+Koristi se ista replay putanja koju navode stari izveštaji. Pri pripremi je
+postojeći replay imao scenu `Level_01`, trajanje 30 s i SHA-256
+`73A7C624F3FA04E76F4268A11A262FDB92399B04D7B32F4A6C1AF259E42CCDA0`.
+Pre merenja zadrži taj fajl nepromenjen. Stari izveštaji ne sadrže hash, pa
+identičnost sa tadašnjim sadržajem nije moguće dokazati samo iz njih.
+
+Bez pokretanja igre ili pravljenja izlaznih foldera, iz korena repozitorijuma:
+
+```powershell
+.\Tools\BenchmarkSeries\Run-BenchmarkSeries.ps1 -Config .\Tools\BenchmarkSeries\series.culling-15.json -ValidateOnly
+```
+
+Provera prikazuje plan od 15 pokretanja i proverava putanje, replay trajanje i
+PresentMon hash. Ne potvrđuje sadržaj postojećeg builda, njegove scenario assete
+ili podršku monitora za izabranu rezoluciju. Priprema konfiguracije i ova provera
+ne pokreću merenja.
+
+## Senke i culling na istoj sceni: 30 merenja
+
+`series.shadows-culling-30.json` sadrži šest kombinacija: senke glavnog svetla
+`Soft`/`Off` × `AlwaysAnimate`/`CullUpdateTransforms`/`CullCompletely`, svaka po
+pet ponavljanja. Sve koriste **istu scenu `Level_01`**, isti lighting asset,
+realtime svetlo, replay i kameru. Ostali uslovi su kao u culling seriji iznad:
+`BenchmarkGrouped`, 300 neprijatelja, Pool, AI 0,5 s, offscreen isključen,
+motion vectors uključeni, 1920×1080 u prozoru, Ultra, bez Unity Profilera.
+Redosled šest grupa rotira se između ponavljanja. Sa pet ponavljanja rotacija
+ne zauzima svih šest početnih pozicija, pa nije potpuno uravnotežena.
+
+**Potreban je novi Windows build sa podrškom za `mainLightShadows`.** Postojeći
+build ne dobija ovu mogućnost izmenom konfiguracije. Napravi ga na putanji
+`E:/Master/Unity/SurvivalBuild/Survival Shooter.exe` pre stvarnih merenja.
+Priprema ove konfiguracije ne pravi build i ne pokreće merenja.
+
+Opcioni `mainLightShadows` u svakoj grupi prihvata:
+
+| Vrednost | Ponašanje |
+| --- | --- |
+| `Scene` ili izostavljeno polje | Zadržava podešavanja scene, kao ranije. |
+| `Soft` | Uključuje Soft Shadows na jedinom aktivnom realtime directional svetlu. |
+| `Off` | Isključuje senke na tom svetlu, a samo svetlo ostaje uključeno. |
+
+Override se primenjuje pre pripreme neprijatelja i merenja. Ne menja ostala
+svetla, kvalitet grafike, lightmap režim, lighting assete ili sačuvanu scenu.
+Prethodne senke se vraćaju pri završetku, prekidu ili grešci. Ako glavno svetlo
+nedostaje, nije realtime ili postoji više aktivnih directional svetala, test
+prijavljuje grešku umesto neodređenog izbora svetla. Za `Soft` je potreban
+profil High, Very High ili Ultra. Promena stanja izabranog svetla tokom testa
+poništava rezultat.
+
+`session.json` čuva `mainLightShadowsOverridden`, `mainLightShadows` i
+`mainLightName`. Vrednost `Scene` označava da override nije primenjen, a ne
+opis efektivnih senki. `summary.json/csv` čuvaju traženi `mainLightShadows`.
+Za Soft/Off seriju skripta odbija nedostajuće ili nepodudarne metapodatke,
+uključujući rezultate starog builda bez ove podrške.
+
+Provera bez pokretanja igre ili pravljenja rezultata:
+
+```powershell
+.\Tools\BenchmarkSeries\Run-BenchmarkSeries.ps1 -Config .\Tools\BenchmarkSeries\series.shadows-culling-30.json -ValidateOnly
+```
+
+Očekivani plan je 30 pokretanja. `-ValidateOnly` proverava konfiguraciju i
+postojeće ulazne fajlove, ali ne proverava da li build sadrži novi kod niti
+efektivna podešavanja svetla u sceni; to se proverava pri stvarnom pokretanju.
+
+Provera kompatibilnosti override koda sa stvarnim Release i Development Windows
+player bibliotekama i provera vraćanja senki, bez pokretanja igre ili merenja:
+
+```powershell
+.\Tools\BenchmarkSeries\tests\Test-ShadowOverride.ps1
+```
+
+Podrazumevana Unity instalacija je `E:/Unity/2018.3.3f1/Editor/Unity.exe`;
+za drugu lokaciju prosledi `-UnityEditor`. U Unity 2018.3 runtime provera koristi
+`Light.bakingOutput.lightmapBakeType`; direktni `Light.lightmapBakeType` dostupan
+je u Editor API-ju, ali ne i u player buildu.
+Ako Application Control blokira testni EXE, `-CompileOnly` izvršava samo provere
+kompilacije protiv oba player API-ja, bez pokretanja testnog procesa.
+
 ## Konfiguracija
+
+Za zasebnu dijagnostiku preostalog CPU i rendering rada posle serije senki i
+cullinga koristi `series.profiler-cpu-rendering.json`: šest Grouped/Pool
+snimanja sa po jednim ponavljanjem, bez PresentMon-a. Zahteva novi Development
+build; [priprema i način analize](PROFILER-CPU-RENDERING.md).
 
 Sva polja iz primera su obavezna. Nepoznata polja se odbijaju da slovne greške ne bi tiho promenile eksperiment. Putanje mogu biti apsolutne ili relativne **u odnosu na konfiguracioni fajl**, uz Windows promenljive poput `%USERPROFILE%`. U JSON-u koristi `/` ili duplo `\\` za razdvajanje foldera.
 
@@ -56,7 +160,7 @@ Za ovu proveru i nove metapodatke potreban je **novi build igre**. Launcher i da
 | `continueOnFailure` | `true`: zabeleži grešku i pređi na sledeći test; `false`: prekini seriju posle prve greške. |
 | `groups` | Redom navedene grupe eksperimenata. |
 | `graphics` | Zajednička rezolucija, fullscreen i naziv kvaliteta; važe za svako merenje. |
-| `unityProfiler` | Opciono, podrazumevano `false`. `true` uključuje samo Unity Profiler na 60 FPS, bez PresentMon-a, za Continuous 300/Burst 300 uz replay od 30 s i Development Build. |
+| `unityProfiler` | Opciono, podrazumevano `false`. `true` uključuje samo Unity Profiler na 60 FPS, bez PresentMon-a, za Continuous 300/Burst 300/Grouped 300 uz replay od 30 s i Development Build. |
 
 | Polje grupe | Značenje |
 | --- | --- |

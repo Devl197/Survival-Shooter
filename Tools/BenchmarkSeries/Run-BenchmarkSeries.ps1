@@ -87,7 +87,15 @@ $names = @{}
 $plan = @()
 foreach ($group in $settings.groups) {
     Assert-Properties $group @('name','scene','scenario','allocations','periodicPathUpdates',
-        'pathUpdateIntervalSeconds','animatorCulling','updateWhenOffscreen','skinnedMotionVectors') 'group'
+        'pathUpdateIntervalSeconds','animatorCulling','updateWhenOffscreen','skinnedMotionVectors') 'group' @('mainLightShadows')
+    if ($null -ne $group.PSObject.Properties['mainLightShadows']) {
+        if ($group.mainLightShadows -cnotin @('Scene','Off','Soft')) { throw 'Unknown mainLightShadows. Use Scene, Off or Soft.' }
+    } else {
+        $group | Add-Member -NotePropertyName mainLightShadows -NotePropertyValue 'Scene'
+    }
+    if ($group.mainLightShadows -eq 'Soft' -and $settings.graphics.quality -cnotin @('High','Very High','Ultra')) {
+        throw 'Soft shadows require High, Very High or Ultra quality.'
+    }
     Assert-Name $group.name
     if ($group.name -eq '_automation') { throw 'The group name _automation is reserved for series logs.' }
     if ($names.ContainsKey($group.name)) { throw "Duplicate group: $($group.name)" }
@@ -98,8 +106,8 @@ foreach ($group in $settings.groups) {
         'BenchmarkFrequent','BenchmarkGrouped')) {
         throw "Unknown scenario: $($group.scenario)"
     }
-    if ($unityProfiler -and $group.scenario -notin @('BenchmarkContinuous','BenchmarkBurst')) {
-        throw 'This diagnostic Profiler series supports Continuous 300 and Burst 300 only.'
+    if ($unityProfiler -and $group.scenario -notin @('BenchmarkContinuous','BenchmarkBurst','BenchmarkGrouped')) {
+        throw 'This diagnostic Profiler series supports Continuous 300, Burst 300 and Grouped 300 only.'
     }
     if ($group.animatorCulling -notin @('AlwaysAnimate','CullUpdateTransforms','CullCompletely')) { throw 'Unknown animatorCulling.' }
     Assert-Number $group.pathUpdateIntervalSeconds 0.01 86400 $false 'pathUpdateIntervalSeconds'
@@ -136,7 +144,7 @@ for ($repeat = 0; $repeat -lt $settings.repetitions; $repeat++) {
         }
     }
 }
-$plan | Select-Object @{n='Group';e={$_.group.name}}, repetition, allocation | Format-Table | Out-Host
+$plan | Select-Object @{n='Group';e={$_.group.name}}, repetition, allocation, @{n='Shadows';e={$_.group.mainLightShadows}} | Format-Table | Out-Host
 Write-Host ("Planned runs: {0}; results root: {1}" -f $plan.Count, $resultsRoot)
 Write-Host ("Unity Profiler segmented recording: {0}" -f $unityProfiler)
 if ($unityProfiler) { Write-Host 'Diagnostic mode: Unity Profiler only, 60 FPS, no PresentMon process.' }
@@ -165,12 +173,13 @@ try {
         $request = [ordered]@{ scene = $group.scene; scenario = $group.scenario; allocation = $item.allocation
             replayPath = $replay; presentMonPath = $presentMon; resultsDirectory = $groupDirectory; reportPath = $reportPath
             periodicPathUpdates = $group.periodicPathUpdates; pathUpdateIntervalSeconds = $group.pathUpdateIntervalSeconds
-            animatorCulling = $group.animatorCulling; updateWhenOffscreen = $group.updateWhenOffscreen
+            animatorCulling = $group.animatorCulling; mainLightShadows = $group.mainLightShadows; updateWhenOffscreen = $group.updateWhenOffscreen
             skinnedMotionVectors = $group.skinnedMotionVectors; graphics = $settings.graphics }
         $request.captureWithPresentMon = !$unityProfiler
         Write-Json $request $requestPath
         $row = [pscustomobject][ordered]@{ run = $runId; group = $group.name; scene = $group.scene
             scenario = $group.scenario; allocation = $item.allocation; repetition = $item.repetition
+            mainLightShadows = $group.mainLightShadows
             screenWidth = $settings.graphics.width; screenHeight = $settings.graphics.height
             fullscreen = $settings.graphics.fullscreen; qualityLevel = $settings.graphics.quality
             result = 'Running'; error = ''; captureDirectory = ''; profilerDirectory = $profilerDirectory; exitCode = $null
@@ -209,6 +218,13 @@ try {
                     throw 'Capture directory is outside its configured group.'
                 }
                 $metadata = Get-Content -LiteralPath (Join-Path $capturePath 'session.json') -Raw | ConvertFrom-Json
+                if ($request.mainLightShadows -ne 'Scene') {
+                    if ($null -eq $metadata.PSObject.Properties['mainLightShadowsOverridden'] -or
+                        $null -eq $metadata.PSObject.Properties['mainLightShadows'] -or
+                        !$metadata.mainLightShadowsOverridden -or $metadata.mainLightShadows -cne $request.mainLightShadows) {
+                        throw 'Capture shadow metadata is missing or mismatched. Rebuild the game with main light shadow override support.'
+                    }
+                }
                 foreach ($field in @('screenWidth','screenHeight','fullscreen','qualityLevel')) {
                     if ($null -eq $metadata.PSObject.Properties[$field]) {
                         throw 'Capture is missing graphics metadata. Rebuild the game with graphics configuration support.'
@@ -244,12 +260,52 @@ try {
                     throw 'Unity dropped Profiler frames. This capture is incomplete; inspect the player log.'
                 }
                 $profile = Get-Content -LiteralPath (Join-Path $profilerDirectory 'profiler.json') -Raw | ConvertFrom-Json
+                # Grouped: deaths at 5..27 s, 60 per second; 28..29 s cannot finish before 30 s.
+                $expectedRemoved = if ($request.scenario -eq 'BenchmarkGrouped') { 1380 } else { 120 }
                 if ($profile.result -ne 'Completed' -or $profile.scenario -ne $request.scenario -or
                     $profile.allocation -ne $request.allocation -or @($profile.segments).Count -eq 0 -or
-                    $profile.framesPerSegment -ne 200 -or $profile.removed -ne 120 -or $profile.spawned -ne 420 -or
+                    $profile.framesPerSegment -ne 200 -or $profile.removed -ne $expectedRemoved -or $profile.spawned -ne (300 + $expectedRemoved) -or
                     $profile.poolExpansions -ne 0 -or $profile.targetFrameRate -ne 60 -or
                     $profile.bufferBytes -ne 134217728 -or $profile.captureWithPresentMon) {
                     throw 'Profiler capture is incomplete or does not match the diagnostic scenario.'
+                }
+                if ($request.scenario -eq 'BenchmarkGrouped' -or $request.mainLightShadows -ne 'Scene') {
+                    if ($null -eq $profile.PSObject.Properties['configuration'] -or $null -eq $profile.configuration) {
+                        throw 'Profiler settings metadata is missing. Rebuild the Development player with diagnostic configuration support.'
+                    }
+                    $actual = $profile.configuration
+                    $expectedSettings = @{
+                        scene = $request.scene; replayFile = $request.replayPath; duration = 30; seed = 12345; enemyCount = 300
+                        animatorCullingMode = $request.animatorCulling; enemyCullingOverridden = $true
+                        updateWhenOffscreen = $request.updateWhenOffscreen; skinnedMotionVectors = $request.skinnedMotionVectors
+                        periodicPathUpdates = $request.periodicPathUpdates
+                        screenWidth = $settings.graphics.width; screenHeight = $settings.graphics.height
+                        fullscreen = $settings.graphics.fullscreen; qualityLevel = $settings.graphics.quality; vSyncCount = 0
+                    }
+                    foreach ($field in $expectedSettings.Keys) {
+                        if ($null -eq $actual.PSObject.Properties[$field] -or $actual.$field -cne $expectedSettings[$field]) {
+                            throw "Profiler configuration mismatch: $field."
+                        }
+                    }
+                    if ($null -eq $actual.PSObject.Properties['pathUpdateIntervalSeconds'] -or
+                        [math]::Abs($actual.pathUpdateIntervalSeconds - $request.pathUpdateIntervalSeconds) -gt 0.00001) {
+                        throw 'Profiler AI interval does not match the request.'
+                    }
+                    if ($request.mainLightShadows -ne 'Scene' -and
+                        ($null -eq $actual.PSObject.Properties['mainLightShadowsOverridden'] -or
+                         $null -eq $actual.PSObject.Properties['mainLightShadows'] -or
+                         !$actual.mainLightShadowsOverridden -or $actual.mainLightShadows -cne $request.mainLightShadows)) {
+                        throw 'Profiler shadow override is missing or mismatched.'
+                    }
+                    if ($request.scenario -eq 'BenchmarkGrouped') {
+                        $scenarioSettings = $actual.scenarioConfiguration | ConvertFrom-Json
+                        if ($scenarioSettings.pattern -ne 1 -or $scenarioSettings.enemyCount -ne 300 -or
+                            $scenarioSettings.groupSize -ne 60 -or $scenarioSettings.replacementInterval -ne 1 -or
+                            $scenarioSettings.initialLifetime -ne 5 -or $scenarioSettings.deathDuration -ne 2 -or
+                            $scenarioSettings.seed -ne 12345 -or ($scenarioSettings.typeWeights -join ',') -ne '1,1,1') {
+                            throw 'Grouped Profiler scenario differs from the measured shadow/culling series.'
+                        }
+                    }
                 }
                 if ($profile.segments[-1].endSeconds -gt 32) {
                     throw 'Profiler capture exceeded 32 wall-clock seconds for a 30-second replay. Recording stalled.'

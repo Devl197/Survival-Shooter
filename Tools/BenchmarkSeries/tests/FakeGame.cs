@@ -44,6 +44,8 @@ class FakeGame
             screenHeight = graphics["height"], fullscreen = graphics["fullscreen"],
             qualityLevel = mode == "bad-quality" ? "Unexpected" : graphics["quality"],
             enemyCullingOverridden = true, animatorCullingMode = request["animatorCulling"],
+            mainLightShadowsOverridden = mode != "missing-shadows" && (string)request["mainLightShadows"] != "Scene",
+            mainLightShadows = mode == "bad-shadows" ? "Unexpected" : request["mainLightShadows"],
             periodicPathUpdates = mode == "bad-settings" ? !(bool)request["periodicPathUpdates"] : (bool)request["periodicPathUpdates"],
             pathUpdateIntervalSeconds = request["pathUpdateIntervalSeconds"],
             updateWhenOffscreen = request["updateWhenOffscreen"], skinnedMotionVectors = request["skinnedMotionVectors"]
@@ -51,6 +53,8 @@ class FakeGame
         }
         if (Array.IndexOf(args, "--benchmark-profiler-log") >= 0 && mode != "missing-profiler")
         {
+            bool grouped = (string)request["scenario"] == "BenchmarkGrouped";
+            int expectedRemoved = grouped ? 1380 : 120;
             int profilerArgument = Array.IndexOf(args, "--benchmark-profiler-directory");
             if (profilerArgument < 0 || profilerArgument + 1 >= args.Length || !Path.IsPathRooted(args[profilerArgument + 1]))
                 throw new Exception("Missing absolute Profiler directory argument.");
@@ -60,7 +64,20 @@ class FakeGame
             File.WriteAllText(Path.Combine(profilerDirectory, "segment-0001.raw"), mode == "empty-profiler" ? "" : "test-double");
             File.WriteAllText(Path.Combine(profilerDirectory, "profiler.json"), json.Serialize(new {
                 result = "Completed", scenario = request["scenario"], allocation = request["allocation"],
-                framesPerSegment = 200, spawned = 420, removed = mode == "bad-profiler-counters" ? 119 : 120,
+                framesPerSegment = 200, spawned = 300 + expectedRemoved, removed = mode == "bad-profiler-counters" ? expectedRemoved - 1 : expectedRemoved,
+                configuration = mode == "missing-profiler-settings" ? null : new {
+                    scene = request["scene"], replayFile = replay, duration = 30, seed = 12345, enemyCount = 300,
+                    scenarioConfiguration = json.Serialize(new { pattern = 1, enemyCount = 300, groupSize = 60,
+                        replacementInterval = 1, initialLifetime = 5, deathDuration = 2, seed = 12345, typeWeights = new[] { 1, 1, 1 } }),
+                    animatorCullingMode = mode == "bad-profiler-culling" ? "Unexpected" : request["animatorCulling"],
+                    enemyCullingOverridden = true, periodicPathUpdates = request["periodicPathUpdates"],
+                    pathUpdateIntervalSeconds = request["pathUpdateIntervalSeconds"],
+                    updateWhenOffscreen = request["updateWhenOffscreen"], skinnedMotionVectors = request["skinnedMotionVectors"],
+                    mainLightShadowsOverridden = (string)request["mainLightShadows"] != "Scene",
+                    mainLightShadows = mode == "bad-profiler-shadows" ? "Unexpected" : request["mainLightShadows"],
+                    screenWidth = graphics["width"], screenHeight = graphics["height"], fullscreen = graphics["fullscreen"],
+                    qualityLevel = graphics["quality"], vSyncCount = 0
+                },
                 poolExpansions = 0, targetFrameRate = 60, bufferBytes = 134217728, captureWithPresentMon = false,
                 segments = new[] { new { file = "segment-0001.raw", startFrame = 10,
                     endFrame = mode == "oversized-profiler" ? 211 : 210, startSeconds = 0, endSeconds = mode == "stalled-profiler" ? 45 : 30 } }

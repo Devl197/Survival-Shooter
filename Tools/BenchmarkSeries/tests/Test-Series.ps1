@@ -176,7 +176,79 @@ Check $caught 'Unknown graphics quality was accepted.'
     try { & $runner -Config $configPath -ValidateOnly } catch { $caught = $true }
     Check $caught 'Diagnostic replay duration was not checked.'
 }
-Write-Host 'PASS: planning, balanced ordering, graphics and frame validation, failure handling, and segmented Profiler orchestration.'
+& {
+    $settings = Get-Content (Join-Path $PSScriptRoot '../series.shadows-culling-30.json') -Raw | ConvertFrom-Json
+    $settings.gameExecutable = $fakeGame
+    $settings.presentMonPath = Join-Path $repo 'Tools/PresentMon/PresentMon-2.6.0-x64.exe'
+    $settings.replayPath = Join-Path $work 'shadow-replay.json'
+    $settings.resultsRoot = Join-Path $work 'shadow-results'
+    $settings.pauseSeconds = 0
+    $configPath = Join-Path $work 'shadow-config.json'
+    Set-Mode 'success'
+    Save-Config
+    . $runner -Config $configPath -ValidateOnly
+    Check ($plan.Count -eq 30) 'Expected thirty shadow/culling runs.'
+    Check (!(Test-Path $settings.resultsRoot)) 'Shadow ValidateOnly wrote results.'
+    Check (@($settings.groups.scene | Select-Object -Unique).Count -eq 1) 'Shadow comparison must use the same scene.'
+    foreach ($group in $settings.groups) {
+        Check (@($plan | Where-Object { $_.group.name -eq $group.name }).Count -eq 5) 'Each shadow/culling combination must run five times.'
+    }
+    $settings.repetitions = 1
+    $settings.groups = @($settings.groups[0], $settings.groups[1])
+    Save-Config
+    & $runner -Config $configPath
+    $series = @(Get-ChildItem $settings.resultsRoot -Directory)[0]
+    $rows = @(Get-Content (Join-Path $series.FullName '_automation/summary.json') -Raw | ConvertFrom-Json)
+    Check (($rows.mainLightShadows -join ',') -eq 'Soft,Off') 'Shadow states missing from summary.'
+    foreach ($mode in @('bad-shadows','missing-shadows')) {
+        Set-Mode $mode
+        Save-Config
+        $caught = $false
+        try { & $runner -Config $configPath } catch { $caught = $true }
+        Check $caught "Shadow failure '$mode' was accepted."
+    }
+    foreach ($invalid in @('On','soft',$null)) {
+        $settings.groups[0].mainLightShadows = $invalid
+        Save-Config
+        $caught = $false
+        try { & $runner -Config $configPath -ValidateOnly } catch { $caught = $true }
+        Check $caught 'Invalid shadow mode was accepted.'
+    }
+}
+Write-Host 'PASS: planning, balanced ordering, graphics, shadows and frame validation, failure handling, and segmented Profiler orchestration.'
+& {
+    $settings = Get-Content (Join-Path $PSScriptRoot '../series.profiler-cpu-rendering.json') -Raw | ConvertFrom-Json
+    $settings.gameExecutable = $fakeGame
+    $settings.replayPath = Join-Path $work 'cpu-rendering-replay.json'
+    $settings.resultsRoot = Join-Path $work 'cpu-rendering-results'
+    $settings.pauseSeconds = 0
+    $configPath = Join-Path $work 'cpu-rendering-config.json'
+    @{duration=30;testMode='success'} | ConvertTo-Json | Set-Content -LiteralPath $settings.replayPath -Encoding UTF8
+    Save-Config
+    . $runner -Config $configPath -ValidateOnly
+    Check ($plan.Count -eq 6) 'Expected six CPU/rendering diagnostic runs.'
+    Check (!(Test-Path $settings.resultsRoot)) 'CPU/rendering ValidateOnly wrote results.'
+    Check (@($plan | Where-Object { $_.group.scenario -ne 'BenchmarkGrouped' -or $_.allocation -ne 'Pool' }).Count -eq 0) 'CPU/rendering conditions differ from the measured series.'
+    & $runner -Config $configPath
+    $series = @(Get-ChildItem $settings.resultsRoot -Directory)[0]
+    $rows = @(Get-Content (Join-Path $series.FullName '_automation/summary.json') -Raw | ConvertFrom-Json)
+    Check ($rows.Count -eq 6 -and @($rows | Where-Object result -ne 'Completed').Count -eq 0) 'CPU/rendering orchestration failed.'
+    $settings.groups = @($settings.groups[0])
+    foreach ($mode in @('missing-profiler-settings','bad-profiler-culling','bad-profiler-shadows','bad-profiler-counters')) {
+        Set-Mode $mode
+        # Profiler diagnostics require 30 seconds even for failure cases.
+        @{duration=30;testMode=$mode} | ConvertTo-Json | Set-Content -LiteralPath $settings.replayPath -Encoding UTF8
+        Save-Config
+        $caught = $false
+        try { & $runner -Config $configPath } catch { $caught = $true }
+        Check $caught "Invalid CPU/rendering profile '$mode' was accepted."
+    }
+}
+$shadowExecutable = Join-Path $work 'ShadowOverrideTests.exe'
+& "$env:WINDIR/Microsoft.NET/Framework64/v4.0.30319/csc.exe" /nologo "/out:$shadowExecutable" (Join-Path $repo 'Assets/Scripts/Manager/BenchmarkShadowOverride.cs') (Join-Path $PSScriptRoot 'ShadowOverrideTests.cs')
+Check ($LASTEXITCODE -eq 0) 'Cannot compile shadow lifecycle tests.'
+& $shadowExecutable | Out-Host
+Check ($LASTEXITCODE -eq 0) 'Shadow lifecycle tests failed.'
 $captureSource = Join-Path $repo 'Assets/Scripts/Manager/BenchmarkProfilerCapture.cs'
 $captureTests = Join-Path $PSScriptRoot 'ProfilerCaptureTests.cs'
 foreach ($variant in @('Development','Release')) {

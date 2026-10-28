@@ -1,0 +1,104 @@
+{
+  "seriesName": "CPU-Rendering-Grouped-300-Shadows-Culling",
+  "gameExecutable": "E:/Master/Unity/ProfilerSurvivalBuild/Survival Shooter.exe",
+  "presentMonPath": "E:/Master/Unity/SurvivalBuild/Tools/PresentMon/PresentMon-2.6.0-x64.exe",
+  "replayPath": "%USERPROFILE%/AppData/LocalLow/DefaultCompany/Survival Shooter/Replays/session.json",
+  "resultsRoot": "E:/Master/Merenja",
+  "repetitions": 1,
+  "pauseSeconds": 10,
+  "timeoutSeconds": 600,
+  "continueOnFailure": false,
+  "unityProfiler": true,
+  "graphics": {
+    "width": 1920,
+    "height": 1080,
+    "fullscreen": false,
+    "quality": "Ultra"
+  },
+  "groups": [
+    {
+      "name": "Shadows-Soft-AlwaysAnimate",
+      "scene": "Level_01",
+      "scenario": "BenchmarkGrouped",
+      "allocations": [
+        "Pool"
+      ],
+      "periodicPathUpdates": true,
+      "pathUpdateIntervalSeconds": 0.5,
+      "animatorCulling": "AlwaysAnimate",
+      "updateWhenOffscreen": false,
+      "skinnedMotionVectors": true,
+      "mainLightShadows": "Soft"
+    },
+    {
+      "name": "Shadows-Off-AlwaysAnimate",
+      "scene": "Level_01",
+      "scenario": "BenchmarkGrouped",
+      "allocations": [
+        "Pool"
+      ],
+      "periodicPathUpdates": true,
+      "pathUpdateIntervalSeconds": 0.5,
+      "animatorCulling": "AlwaysAnimate",
+      "updateWhenOffscreen": false,
+      "skinnedMotionVectors": true,
+      "mainLightShadows": "Off"
+    },
+    {
+      "name": "Shadows-Soft-CullUpdateTransforms",
+      "scene": "Level_01",
+      "scenario": "BenchmarkGrouped",
+      "allocations": [
+        "Pool"
+      ],
+      "periodicPathUpdates": true,
+      "pathUpdateIntervalSeconds": 0.5,
+      "animatorCulling": "CullUpdateTransforms",
+      "updateWhenOffscreen": false,
+      "skinnedMotionVectors": true,
+      "mainLightShadows": "Soft"
+    },
+    {
+      "name": "Shadows-Off-CullUpdateTransforms",
+      "scene": "Level_01",
+      "scenario": "BenchmarkGrouped",
+      "allocations": [
+        "Pool"
+      ],
+      "periodicPathUpdates": true,
+      "pathUpdateIntervalSeconds": 0.5,
+      "animatorCulling": "CullUpdateTransforms",
+      "updateWhenOffscreen": false,
+      "skinnedMotionVectors": true,
+      "mainLightShadows": "Off"
+    },
+    {
+      "name": "Shadows-Soft-CullCompletely",
+      "scene": "Level_01",
+      "scenario": "BenchmarkGrouped",
+      "allocations": [
+        "Pool"
+      ],
+      "periodicPathUpdates": true,
+      "pathUpdateIntervalSeconds": 0.5,
+      "animatorCulling": "CullCompletely",
+      "updateWhenOffscreen": false,
+      "skinnedMotionVectors": true,
+      "mainLightShadows": "Soft"
+    },
+    {
+      "name": "Shadows-Off-CullCompletely",
+      "scene": "Level_01",
+      "scenario": "BenchmarkGrouped",
+      "allocations": [
+        "Pool"
+      ],
+      "periodicPathUpdates": true,
+      "pathUpdateIntervalSeconds": 0.5,
+      "animatorCulling": "CullCompletely",
+      "updateWhenOffscreen": false,
+      "skinnedMotionVectors": true,
+      "mainLightShadows": "Off"
+    }
+  ]
+}

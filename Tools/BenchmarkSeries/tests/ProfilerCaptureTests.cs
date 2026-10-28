@@ -53,6 +53,10 @@ class ProfilerCaptureTests
         UnityEngine.Time.realtimeSinceStartup = 10;
         using (var capture = BenchmarkProfilerCapture.StartIfRequested("BenchmarkBurst", "Pool"))
         {
+            capture.Configure(new BenchmarkProfilerCapture.Configuration {
+                scene = "Level_01", mainLightShadowsOverridden = true, mainLightShadows = "Off",
+                animatorCullingMode = "CullUpdateTransforms", duration = 30, enemyCount = 300
+            });
             Check(!UnityEngine.Profiling.Profiler.enabled, "Preparation must not be recorded.");
             capture.Begin();
             Check(UnityEngine.Profiling.Profiler.maxUsedMemory == 128 * 1024 * 1024, "Profiler buffer was not configured.");
@@ -69,6 +73,10 @@ class ProfilerCaptureTests
             UnityEngine.Profiling.Profiler.logFile == "original" && UnityEngine.Profiling.Profiler.maxUsedMemory == 16 * 1024 * 1024, "Profiler state was not restored.");
         var manifest = new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(File.ReadAllText(Path.Combine(directory, "profiler.json")));
         Check((string)manifest["result"] == "Completed" && (int)manifest["removed"] == 120, "Completion must not be overwritten on disposal.");
+        var configuration = (Dictionary<string, object>)manifest["configuration"];
+        Check((string)configuration["mainLightShadows"] == "Off" &&
+            (string)configuration["animatorCullingMode"] == "CullUpdateTransforms" &&
+            (int)configuration["enemyCount"] == 300, "Profiler configuration was not retained.");
         var segments = (ArrayList)manifest["segments"];
         Check(segments.Count == 4, "Expected 200 + 200 + 200 + 1 frames.");
         int expectedStart = 100;

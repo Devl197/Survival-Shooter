@@ -22,6 +22,7 @@ public class BenchmarkRunner : MonoBehaviour
     public float stabilizationSeconds = 1f;
     public float captureTailSeconds = 2f;
     PresentMonCapture capture;
+    readonly BenchmarkShadowOverride shadowOverride = new BenchmarkShadowOverride();
     string resultsDirectory;
     BenchmarkProfilerCapture profilerCapture;
     bool preparingCapture;
@@ -107,6 +108,7 @@ BenchmarkSchedule schedule;
         var preparation = System.Diagnostics.Stopwatch.StartNew();
         try
         {
+            shadowOverride.Apply(BenchmarkAutomation.MainLightShadows);
             originalVSyncCount = QualitySettings.vSyncCount;
             originalTargetFrameRate = Application.targetFrameRate;
             ownsFrameSettings = true;
@@ -176,6 +178,21 @@ BenchmarkSchedule schedule;
             if (BenchmarkProfilerCapture.Requested && captureWithPresentMon)
                 throw new InvalidOperationException("Profiler diagnostics must run without simultaneous PresentMon capture.");
             profilerCapture = BenchmarkProfilerCapture.StartIfRequested(scenario.name, selectedAllocation.ToString());
+            if (profilerCapture != null)
+                profilerCapture.Configure(new BenchmarkProfilerCapture.Configuration {
+                    scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name,
+                    scenarioConfiguration = JsonUtility.ToJson(scenario), replayFile = replay.FilePath,
+                    duration = duration, seed = scenario.seed, enemyCount = scenario.enemyCount,
+                    enemyCullingOverridden = overrideEnemyCulling,
+                    animatorCullingMode = overrideEnemyCulling ? animatorCulling.ToString() : "Prefab settings",
+                    updateWhenOffscreen = updateWhenOffscreen, skinnedMotionVectors = skinnedMotionVectors,
+                    periodicPathUpdates = active[0].GetComponent<EnemyMovement>().PeriodicPathUpdates,
+                    pathUpdateIntervalSeconds = active[0].GetComponent<EnemyMovement>().PathUpdateInterval,
+                    mainLightShadowsOverridden = shadowOverride.Applied,
+                    mainLightShadows = shadowOverride.Mode, mainLightName = shadowOverride.LightName,
+                    screenWidth = Screen.width, screenHeight = Screen.height, fullscreen = Screen.fullScreen,
+                    qualityLevel = QualitySettings.names[QualitySettings.GetQualityLevel()], vSyncCount = QualitySettings.vSyncCount
+                });
             if (captureWithPresentMon)
             {
                 if (Application.platform != RuntimePlatform.WindowsPlayer)
@@ -204,6 +221,11 @@ BenchmarkSchedule schedule;
 
     void Update()
     {
+        if (running && !shadowOverride.Matches())
+        {
+            Finish("Invalid: main light shadow settings changed");
+            return;
+        }
         if (running && !BenchmarkAutomation.GraphicsMatch())
         {
             Finish("Invalid: graphics settings changed");
@@ -317,6 +339,7 @@ BenchmarkSchedule schedule;
             profilerCapture = null;
         }
         RestoreFrameSettings();
+        shadowOverride.Restore();
         if (spawner != null) spawner.Clear();
         activeCount = 0;
         active = null;
@@ -350,6 +373,9 @@ BenchmarkSchedule schedule;
         {
             capture = new PresentMonCapture();
             capture.Run.scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
+            capture.Run.mainLightShadowsOverridden = shadowOverride.Applied;
+            capture.Run.mainLightShadows = shadowOverride.Mode;
+            capture.Run.mainLightName = shadowOverride.LightName;
             RecordPathUpdateSettings(capture.Run);
             capture.Run.enemyCullingOverridden = overrideEnemyCulling;
             capture.Run.animatorCullingMode = overrideEnemyCulling ? animatorCulling.ToString() : "Prefab settings";
@@ -398,6 +424,11 @@ BenchmarkSchedule schedule;
         yield return null;
         ready = ready && Time.timeScale == 0f && !capture.Exited;
         RestorePreparation();
+        if (ready && !shadowOverride.Matches())
+        {
+            ready = false;
+            capture.Run.error = "Main light shadow settings changed during capture preparation.";
+        }
         if (ready && !BenchmarkAutomation.GraphicsMatch())
         {
             ready = false;
@@ -527,5 +558,6 @@ BenchmarkSchedule schedule;
         }
         else if (running) Finish("Stopped");
         RestoreFrameSettings();
+        shadowOverride.Restore();
     }
 }

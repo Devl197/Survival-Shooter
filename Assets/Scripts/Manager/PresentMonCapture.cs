@@ -17,6 +17,8 @@ public class PresentMonRun
     public bool unityProfiler;
     public string unityProfilerDirectory;
     public string scene;
+    public bool mainLightShadowsOverridden;
+    public string mainLightShadows, mainLightName;
     public bool enemyCullingOverridden;
     public string animatorCullingMode;
     // These booleans describe the override only when enemyCullingOverridden is true.

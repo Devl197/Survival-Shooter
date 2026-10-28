@@ -13,6 +13,15 @@ internal sealed class BenchmarkProfilerCapture : IDisposable
     const int BufferBytes = 128 * 1024 * 1024;
     const int MaxSegments = 1024;
     [Serializable]
+    public sealed class Configuration
+    {
+        public string scene, scenarioConfiguration, replayFile, animatorCullingMode, mainLightShadows, mainLightName, qualityLevel;
+        public bool enemyCullingOverridden, updateWhenOffscreen, skinnedMotionVectors, periodicPathUpdates;
+        public bool mainLightShadowsOverridden, fullscreen;
+        public float pathUpdateIntervalSeconds, duration;
+        public int seed, enemyCount, screenWidth, screenHeight, vSyncCount;
+    }
+    [Serializable]
     sealed class Segment
     {
         public string file;
@@ -29,6 +38,7 @@ internal sealed class BenchmarkProfilerCapture : IDisposable
         public int bufferBytes = BufferBytes;
         public bool captureWithPresentMon;
         public string unityVersion, scenario, allocation;
+        public Configuration configuration;
         public int spawned, removed, poolExpansions;
         public List<Segment> segments = new List<Segment>(MaxSegments);
     }
@@ -79,6 +89,13 @@ internal sealed class BenchmarkProfilerCapture : IDisposable
             string file = "segment-" + (i + 1).ToString("D4", CultureInfo.InvariantCulture) + ".raw";
             preparedSegments[i] = new Segment { file = file, path = Path.Combine(directory, file) };
         }
+        SaveManifest();
+    }
+
+    public void Configure(Configuration configuration)
+    {
+        if (recording || stopped) throw new InvalidOperationException("Configure Profiler capture before recording.");
+        manifest.configuration = configuration;
         SaveManifest();
     }
 

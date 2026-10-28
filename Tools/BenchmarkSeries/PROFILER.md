@@ -1,5 +1,10 @@
 # Dijagnostička serija za GC i Spawn/Despawn
 
+Za CPU i rendering posle testova senki i cullinga postoji zasebna
+`series.profiler-cpu-rendering.json`, sa Grouped scenarijem i šest snimanja.
+Koristi [njeno uputstvo](PROFILER-CPU-RENDERING.md); brojači od 120 zamena
+opisani ispod važe za staru Continuous/Burst dijagnostiku.
+
 `series.profiler-300.json` snima **Continuous 300 i Burst 300 × InstantiateDestroy i Pool × jedno ponavljanje = četiri merenja**. Koristi isti replay od 30 s, initialLifetime 4 s i 120 zamena. Grafička i AI podešavanja jednaka su glavnoj seriji. Pauza je 10 s, timeout 600 s. Snima se samo Unity Profiler, bez PresentMon-a, na ograničenih 60 FPS i sa baferom od 128 MiB. Planiraj oko 2,5 minuta plus pripremu i finalizaciju. Ograničenje FPS-a smanjuje količinu podataka; ovo nije test maksimalnog FPS-a. Zadržava se 120 zamena po merenju.
 
 Sa dva scenarija raspored rotira parove: prvo Continuous/Instantiate, Continuous/Pool, Burst/Instantiate, Burst/Pool; drugo Burst/Pool, Burst/Instantiate, Continuous/Pool, Continuous/Instantiate. Jedno ponavljanje služi dijagnostici. Ako kasnije izabereš šest ponavljanja, svaki scenario ima po tri ranije i tri kasnije pozicije, a svaki režim po tri početna mesta u paru. Sa samo dva scenarija nije moguće posle svakog merenja promeniti oba faktora i obuhvatiti sve četiri kombinacije: strogo smenjivanje zauvek bi ponavljalo samo dve. Raspored glavne serije sa šest scenarija ostaje isti.

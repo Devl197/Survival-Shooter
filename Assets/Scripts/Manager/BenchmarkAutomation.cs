@@ -18,6 +18,7 @@ public static class BenchmarkAutomation
     {
         public string scene, scenario, allocation, replayPath, presentMonPath, resultsDirectory, reportPath;
         public string animatorCulling = "CullUpdateTransforms";
+        public string mainLightShadows = "Scene";
         public bool periodicPathUpdates, updateWhenOffscreen;
         public bool skinnedMotionVectors = true;
         public bool captureWithPresentMon = true;
@@ -32,6 +33,7 @@ public static class BenchmarkAutomation
     }
 
     public static bool Active { get; private set; }
+    public static string MainLightShadows { get { return Active && request != null ? request.mainLightShadows : "Scene"; } }
     static bool completed;
     static Request request;
 

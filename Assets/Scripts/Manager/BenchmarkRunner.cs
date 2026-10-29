@@ -114,6 +114,17 @@ BenchmarkSchedule schedule;
             ownsFrameSettings = true;
             QualitySettings.vSyncCount = 0;
             Application.targetFrameRate = BenchmarkProfilerCapture.Requested ? BenchmarkProfilerCapture.TargetFrameRate : -1;
+            string[] arguments = Environment.GetCommandLineArgs();
+            int fpsIndex = Array.IndexOf(arguments, "--preview-fps");
+            if (fpsIndex >= 0)
+            {
+                int fps;
+                if (fpsIndex + 1 >= arguments.Length || !int.TryParse(arguments[fpsIndex + 1], out fps) || fps < 1 || fps > 1000)
+                    throw new ArgumentException("--preview-fps requires an integer from 1 to 1000.");
+                if (captureWithPresentMon || BenchmarkProfilerCapture.Requested)
+                    throw new InvalidOperationException("FPS preview requires PresentMon and Unity Profiler capture to be disabled.");
+                Application.targetFrameRate = fps;
+            }
             Debug.Log("Benchmark frame settings: scene=" + UnityEngine.SceneManagement.SceneManager.GetActiveScene().name +
                 ", quality=" + QualitySettings.names[QualitySettings.GetQualityLevel()] +
                 ", vSyncCount=" + QualitySettings.vSyncCount +

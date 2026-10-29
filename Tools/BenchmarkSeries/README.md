@@ -1,5 +1,15 @@
 # Automatske serije benchmark testova
 
+## Vizuelni pregled sa ograničenim FPS-om
+
+Novi standalone build prihvata `--preview-fps 60` za ručni izbor kadra tokom
+benchmark playback-a. VSync je isključen, a `Application.targetFrameRate` postavljen
+na 60; to je gornji cilj, ne garancija da računar postiže 60 FPS. Playback vreme
+teče normalno. Ne prosleđuj `--shadow-screenshots`: taj zasebni režim automatski
+zaustavlja i snima kadar. Za pregled isključi PresentMon i Unity Profiler snimanje;
+kombinacija sa njima se odbija. Bez `--preview-fps` merenja ostaju neograničena.
+Postojeći izvršni fajlovi zahtevaju novi build da bi prihvatili ovu opciju.
+
 `Run-BenchmarkSeries.ps1` pokreće novu instancu Windows igre za svako merenje. Igra koristi isti benchmark, playback, pripremu i PresentMon filtriranje kao pri ručnom pokretanju kroz meni. Završava proces tek posle finalizacije snimka i čišćenja. Skripta proverava izlazni kod, izveštaj, status `Completed`, podešavanja u `session.json`, pozitivna vremena frejmova i slaganje njihovog broja sa `filteredFrames`.
 
 ## Priprema i pokretanje
